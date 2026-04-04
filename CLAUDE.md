@@ -1,54 +1,73 @@
-# Claude Code Game Studios -- Game Studio Agent Architecture
+# CLAUDE.md
 
-Indie game development managed through 48 coordinated Claude Code subagents.
-Each agent owns a specific domain, enforcing separation of concerns and quality.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Technology Stack
+## Project Overview
 
-- **Engine**: [CHOOSE: Godot 4 / Unity / Unreal Engine 5]
-- **Language**: [CHOOSE: GDScript / C# / C++ / Blueprint]
-- **Version Control**: Git with trunk-based development
-- **Build System**: [SPECIFY after choosing engine]
-- **Asset Pipeline**: [SPECIFY after choosing engine]
+**Chess Roguelike** - A turn-based survival game combining chess rules with roguelike mechanics on an 8x8 board.
 
-> **Note**: Engine-specialist agents exist for Godot, Unity, and Unreal with
-> dedicated sub-specialists. Use the set matching your engine.
+- **Type**: Single-player HTML5 Canvas game
+- **Language**: Pure JavaScript (ES6+) in demo.html, TypeScript in src/
+- **Dependencies**: None (zero-dependency)
 
-## Project Structure
+## Commands
 
-@.claude/docs/directory-structure.md
+```bash
+# Play the game - open in browser
+demo.html
 
-## Engine Version Reference
+# Run logic tests
+tests/game_logic_test.html   # Unit tests (open in browser)
+tests/harness.html          # Console-based tests
+```
 
-@docs/engine-reference/godot/VERSION.md
+No build step required - the game runs directly in the browser.
 
-## Technical Preferences
+## Architecture
 
-@.claude/docs/technical-preferences.md
+The game has two implementations:
 
-## Coordination Rules
+1. **demo.html** - Self-contained playable demo (single HTML file, all JS embedded)
+2. **src/** - TypeScript implementation split into modules
 
-@.claude/docs/coordination-rules.md
+### Core Game Logic (in demo.html)
 
-## Collaboration Protocol
+| Function | Purpose |
+|----------|---------|
+| `createGrid(size)` | Initialize 8x8 board with cells Map |
+| `updatePlayerAccessiblePositions(state)` | Mark 9 positions around player |
+| `updateThreatMap(state)` | Calculate and mark all enemy threat ranges |
+| `getRookThreat(entity, grid)` | Return straight-line threats until blocked |
+| `getKnightThreat(entity, grid)` | Return 8 L-shape positions |
+| `calculateEnemyMoves(state)` | AI: each enemy moves toward player |
+| `executeEnemyTurn(state)` | Move enemies, check player death, spawn new enemies |
+| `handlePlayerMove(state, targetPos)` | Validate and execute player move |
 
-**User-driven collaboration, not autonomous execution.**
-Every task follows: **Question -> Options -> Decision -> Draft -> Approval**
+### Rendering (CanvasRenderer class in demo.html)
 
-- Agents MUST ask "May I write this to [filepath]?" before using Write/Edit tools
-- Agents MUST show drafts or summaries before requesting approval
-- Multi-file changes require explicit approval for the full changeset
-- No commits without user instruction
+- `render(state)` - Main render loop
+- `screenToBoard(x, y)` - Convert click coordinates to grid position
 
-See `docs/COLLABORATIVE-DESIGN-PRINCIPLE.md` for full protocol and examples.
+### Game Flow
 
-> **First session?** If the project has no engine configured and no game concept,
-> run `/start` to begin the guided onboarding flow.
+```
+Player click → validate accessible → move player → calculate enemy moves → 
+enemy turn → check death → spawn enemies → update threat map → render
+```
 
-## Coding Standards
+### Entity Types
 
-@.claude/docs/coding-standards.md
+- `KING` (player) - moves in 9-square area
+- `PAWN` - moves 1 tile toward player, threatens diagonal
+- `ROOK` - moves straight toward player, threatens entire row/column
+- `KNIGHT` - moves in L-shape toward player, threatens 8 L-positions
 
-## Context Management
+## Testing
 
-@.claude/docs/context-management.md
+The test file at `tests/game_logic_test.html` contains unit tests for:
+- Position utilities (posEq, isValidPos, sign)
+- Threat range calculations (Rook, Knight, Pawn)
+- Player accessible positions
+- Enemy move calculations
+
+Open in browser to run all tests.

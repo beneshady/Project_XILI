@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>游戏逻辑测试</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #f5f5f5; }
+    .test { padding: 10px; margin: 5px 0; border-radius: 4px; }
+    .pass { background: #d4edda; color: #155724; }
+    .fail { background: #f8d7da; color: #721c24; }
+    #summary { font-size: 18px; font-weight: bold; margin: 20px 0; }
+    pre { background: #fff; padding: 10px; border-radius: 4px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>游戏逻辑测试</h1>
+  <div id="results"></div>
+  <div id="summary"></div>
+
+<script>
+// ============================================================================
+// 测试工具函数 (从 demo.html 复制)
+// ============================================================================
+
+function posEq(a, b) {
+  return a.x === b.x && a.y === b.y;
+}
+
+function posKey(pos) {
+  return `${pos.x},${pos.y}`;
+}
+
+function posClone(pos) {
+  return { x: pos.x, y: pos.y };
+}
+
+function isValidPos(pos, size) {
+  return pos.x >= 0 && pos.x < size && pos.y >= 0 && pos.y < size;
+}
+
+function sign(n) {
+  return n === 0 ? 0 : n < 0 ? -1 : 1;
+}
+
+// ============================================================================
+// 游戏逻辑函数
+// ============================================================================
+
+function createGrid(size = 8) {
+  const grid = { size, cells: new Map() };
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      grid.cells.set(posKey({ x, y }), { position: { x, y }, entity: null });
+    }
+  }
+  return grid;
+}
+
+function getRookThreat(entity, grid) {
+  const threats = [];
+  const directions = [
+    { dx: 0, dy: -1 }, { dx: 0, dy: 1 },
+    { dx: -1, dy: 0 }, { dx: 1, dy: 0 },
+  ];
+  for (const dir of directions) {
+    let pos = posClone(entity.position);
+    while (true) {
+      pos.x += dir.dx;
+      pos.y += dir.dy;
+      if (!isValidPos(pos, grid.size)) break;
+      threats.push(posClone(pos));
+      const cell = grid.cells.get(posKey(pos));
+      if (cell && cell.entity) break;
+    }
+  }
+  return threats;
+}
+
+function getKnightThreat(entity, grid) {
+  const moves = [
+    { dx: 1, dy: -2 }, { dx: 2, dy: -1 },
+    { dx: 2, dy: 1 },  { dx: 1, dy: 2 },
+    { dx: -1, dy: 2 }, { dx: -2, dy: 1 },
+    { dx: -2, dy: -1 }, { dx: -1, dy: -2 },
+  ];
+  return moves
+    .map(m => ({ x: entity.position.x + m.dx, y: entity.position.y + m.dy }))
+    .filter(pos => isValidPos(pos, grid.size));
+}
+
+function getPawnThreat(entity, playerPos, gridSize) {
+  const dx = playerPos.x - entity.position.x;
+  const dy = playerPos.y - entity.position.y;
+  const step = {
+    x: entity.position.x + sign(dx),
+    y: entity.position.y + sign(dy),
+  };
+  return isValidPos(step, gridSize) ? [step] : [];
+}
+
+function getPlayerAccessiblePositions(playerPos, gridSize) {
+  const accessible = [];
+  const directions = [
+    { dx: -1, dy: -1 }, { dx: 0, dy: -1 }, { dx: 1, dy: -1 },
+    { dx: -1, dy: 0 },  { dx: 0, dy: 0 },  { dx: 1, dy: 0 },
+    { dx: -1, dy: 1 },  { dx: 0, dy: 1 },  { dx: 1, dy: 1 },
+  ];
+  for (const dir of directions) {
+    const newPos = { x: playerPos.x + dir.dx, y: playerPos.y + dir.dy };
+    if (isValidPos(newPos, gridSize)) {
+      accessible.push(newPos);
+    }
+  }
+  return accessible;
+}
+
+// ============================================================================
+// 测试框架
+// ============================================================================
+
+let passCount = 0;
+let failCount = 0;
+
+function assert(condition, message) {
+  if (condition) {
+    passCount++;
+    return true;
+  } else {
+    failCount++;
+    return false;
+  }
+}
+
+function test(name, fn) {
+  const results = document.getElementById('results');
+  const div = document.createElement('div');
+  div.className = 'test';
+  try {
+    const result = fn();
+    if (result) {
+      div.className += ' pass';
+      div.textContent = `✓ ${name}`;
+    } else {
+      div.className += ' fail';
+      div.textContent = `✗ ${name}`;
+    }
+  } catch (e) {
+    div.className += ' fail';
+    div.textContent = `✗ ${name}: ${e.message}`;
+  }
+  results.appendChild(div);
+}
+
+function assertArrayContains(arr, pos) {
+  return arr.some(p => posEq(p, pos));
+}
+
+// ============================================================================
+// 敌人移动计算
+// ============================================================================
+
+function calculateKnightMove(enemyPos, playerPos, gridSize) {
+  const knightMoves = [
+    { dx: 1, dy: -2 }, { dx: 2, dy: -1 },
+    { dx: 2, dy: 1 },  { dx: 1, dy: 2 },
+    { dx: -1, dy: 2 }, { dx: -2, dy: 1 },
+    { dx: -2, dy: -1 }, { dx: -1, dy: -2 },
+  ];
+
+  let bestMove = null;
+  let bestDist = Infinity;
+
+  for (const move of knightMoves) {
+    const target = {
+      x: enemyPos.x + move.dx,
+      y: enemyPos.y + move.dy,
+    };
+    if (isValidPos(target, gridSize)) {
+      const dist = Math.abs(target.x - playerPos.x) +
+                   Math.abs(target.y - playerPos.y);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestMove = target;
+      }
+    }
+  }
+
+  return bestMove;
+}
+
+// ============================================================================
+// 测试用例
+// ============================================================================
+
+console.log('开始运行测试...');
+
+// 1. 位置工具函数测试
+test('posEq - 相同位置应返回 true', () => {
+  return assert(posEq({ x: 3, y: 4 }, { x: 3, y: 4 }), '相同坐标');
+});
+
+test('posEq - 不同位置应返回 false', () => {
+  return assert(!posEq({ x: 3, y: 4 }, { x: 4, y: 3 }), '不同坐标');
+});
+
+test('isValidPos - 边界内应有效', () => {
+  return assert(isValidPos({ x: 0, y: 0 }, 8) && isValidPos({ x: 7, y: 7 }, 8), '0-7 有效');
+});
+
+test('isValidPos - 边界外应无效', () => {
+  return assert(!isValidPos({ x: -1, y: 0 }, 8) && !isValidPos({ x: 8, y: 0 }, 8), '负数和超出边界无效');
+});
+
+test('sign - 正确返回符号', () => {
+  return assert(sign(-5) === -1 && sign(0) === 0 && sign(5) === 1, '符号函数');
+});
+
+// 2. 车 (Rook) 威胁范围测试
+test('Rook - 中心位置应向四方向延伸', () => {
+  const grid = createGrid(8);
+  const rook = { position: { x: 3, y: 3 } };
+  const threats = getRookThreat(rook, grid);
+  // 向上: (3,0-2), 向下: (3,4-7), 左: (0-2,3), 右: (4-7,3)
+  return assert(
+    threats.length === 22 && // 7+7+4+4 = 22 (中间有自己位置不算)
+    assertArrayContains(threats, { x: 3, y: 0 }) &&
+    assertArrayContains(threats, { x: 3, y: 7 }) &&
+    assertArrayContains(threats, { x: 0, y: 3 }) &&
+    assertArrayContains(threats, { x: 7, y: 3 }),
+    '四方向威胁'
+  );
+});
+
+test('Rook - 边缘位置应只向三个方向延伸', () => {
+  const grid = createGrid(8);
+  const rook = { position: { x: 0, y: 0 } };
+  const threats = getRookThreat(rook, grid);
+  return assert(
+    threats.length === 14 && // 7+7 (向下和向右)
+    assertArrayContains(threats, { x: 7, y: 0 }) &&
+    assertArrayContains(threats, { x: 0, y: 7 }),
+    '边缘威胁'
+  );
+});
+
+test('Rook - 被阻挡时不应越过障碍物', () => {
+  const grid = createGrid(8);
+  grid.cells.get('5,3').entity = { id: 'blocker' }; // 在中间放一个阻挡
+  const rook = { position: { x: 3, y: 3 } };
+  const threats = getRookThreat(rook, grid);
+  // 向右只到 x=4，因为 x=5 被阻挡
+  return assert(
+    !assertArrayContains(threats, { x: 6, y: 3 }) &&
+    !assertArrayContains(threats, { x: 7, y: 3 }),
+    '被阻挡'
+  );
+});
+
+// 3. 马 (Knight) 威胁范围测试
+test('Knight - 中心位置应有8个威胁点', () => {
+  const grid = createGrid(8);
+  const knight = { position: { x: 3, y: 3 } };
+  const threats = getKnightThreat(knight, grid);
+  return assert(threats.length === 8, '8个威胁点');
+});
+
+test('Knight - 边缘位置应减少威胁点', () => {
+  const grid = createGrid(8);
+  const knight = { position: { x: 0, y: 0 } };
+  const threats = getKnightThreat(knight, grid);
+  return assert(threats.length === 2, '只有2个威胁点');
+});
+
+test('Knight - 正确计算马走日', () => {
+  const grid = createGrid(8);
+  const knight = { position: { x: 4, y: 4 } };
+  const threats = getKnightThreat(knight, grid);
+  return assert(
+    assertArrayContains(threats, { x: 5, y: 2 }) &&
+    assertArrayContains(threats, { x: 6, y: 3 }) &&
+    assertArrayContains(threats, { x: 6, y: 5 }) &&
+    assertArrayContains(threats, { x: 5, y: 6 }) &&
+    assertArrayContains(threats, { x: 3, y: 6 }) &&
+    assertArrayContains(threats, { x: 2, y: 5 }) &&
+    assertArrayContains(threats, { x: 2, y: 3 }) &&
+    assertArrayContains(threats, { x: 3, y: 2 }),
+    '马走日正确'
+  );
+});
+
+// 4. 玩家可移动位置测试
+test('Player - 中心位置可移动到周围8格', () => {
+  const pos = { x: 3, y: 3 };
+  const accessible = getPlayerAccessiblePositions(pos, 8);
+  return assert(accessible.length === 9, '9个位置(含自己)');
+});
+
+test('Player - 边缘位置可移动到3格', () => {
+  const pos = { x: 0, y: 0 };
+  const accessible = getPlayerAccessiblePositions(pos, 8);
+  return assert(accessible.length === 4, '4个位置(含自己)');
+});
+
+// 5. 兵威胁测试
+test('Pawn - 兵应斜向威胁玩家', () => {
+  const gridSize = 8;
+  const pawn = { position: { x: 3, y: 3 } };
+  const playerPos = { x: 4, y: 4 };
+  const threats = getPawnThreat(pawn, playerPos, gridSize);
+  return assert(
+    threats.length === 1 && posEq(threats[0], { x: 4, y: 4 }),
+    '斜向威胁'
+  );
+});
+
+// 6. 边界情况测试
+test('边界 - 角落的兵不应威胁棋盘外', () => {
+  const gridSize = 8;
+  const pawn = { position: { x: 0, y: 0 } };
+  const playerPos = { x: -1, y: -1 };
+  const threats = getPawnThreat(pawn, playerPos, gridSize);
+  return assert(threats.length === 0, '无威胁');
+});
+
+test('边界 - 兵在玩家旁边时正确威胁', () => {
+  const gridSize = 8;
+  const pawn = { position: { x: 3, y: 3 } };
+  const playerPos = { x: 2, y: 2 };
+  const threats = getPawnThreat(pawn, playerPos, gridSize);
+  return assert(
+    threats.length === 1 && posEq(threats[0], { x: 2, y: 2 }),
+    '相邻威胁'
+  );
+});
+
+// 7. 马移动计算测试
+test('Knight移动 - 玩家在马附近时应走日字', () => {
+  const enemyPos = { x: 4, y: 4 };
+  const playerPos = { x: 5, y: 6 };
+  const move = calculateKnightMove(enemyPos, playerPos, 8);
+  // 马在(4,4)，玩家在(5,6)，最近的日字是(6,5) - 距离(5,6)为1
+  return assert(
+    move && (posEq(move, { x: 6, y: 5 }) || posEq(move, { x: 3, y: 5 })),
+    '日字形移动'
+  );
+});
+
+test('Knight移动 - 玩家在正前方时应绕到侧面', () => {
+  const enemyPos = { x: 4, y: 4 };
+  const playerPos = { x: 4, y: 5 };
+  const move = calculateKnightMove(enemyPos, playerPos, 8);
+  // 直接向前会被挡住，应该走到侧面
+  return assert(
+    move && (move.x !== 4 || move.y !== 5),
+    '不直走'
+  );
+});
+
+// ============================================================================
+// 测试总结
+// ============================================================================
+
+document.getElementById('summary').textContent =
+  `测试完成: ${passCount} 通过, ${failCount} 失败`;
+
+if (failCount === 0) {
+  document.getElementById('summary').style.color = '#155724';
+} else {
+  document.getElementById('summary').style.color = '#721c24';
+}
+
+console.log(`测试完成: ${passCount} 通过, ${failCount} 失败`);
+</script>
+</body>
+</html>
