@@ -58,6 +58,44 @@
     button:active {
       background: #8895a0;
     }
+    #game-over-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #game-over-modal {
+      background: #fff;
+      padding: 40px 60px;
+      border-radius: 16px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    #game-over-modal h2 {
+      margin: 0 0 20px 0;
+      font-size: 36px;
+      color: #c97b5e;
+    }
+    #game-over-modal p {
+      margin: 10px 0;
+      font-size: 20px;
+      color: #4a4a4a;
+    }
+    #game-over-modal button {
+      margin-top: 20px;
+      padding: 12px 30px;
+      font-size: 16px;
+      background: #c97b5e;
+    }
+    #game-over-modal button:hover {
+      background: #b56a4d;
+    }
   </style>
 </head>
 <body>
@@ -74,6 +112,14 @@
     </div>
   </div>
 
+  <div id="game-over-overlay">
+    <div id="game-over-modal">
+      <h2>You Died</h2>
+      <p id="final-score">最终得分: 0</p>
+      <button onclick="location.reload()">再来一局</button>
+    </div>
+  </div>
+
   <script>
     // ============================================================================
     // 类型定义
@@ -84,11 +130,13 @@
       PAWN: 'pawn',
       ROOK: 'rook',
       KNIGHT: 'knight',
+      COIN: 'coin',
     };
 
     const Team = {
       PLAYER: 'player',
       ENEMY: 'enemy',
+      ITEM: 'item',
     };
 
     const GamePhase = {
@@ -169,6 +217,7 @@
           const cell = {
             position: { x, y },
             entity: null,
+            hasCoin: false,
             isPlayerAccessible: false,
             isThreatened: false,
           };
@@ -490,6 +539,12 @@
         animAction.entityId = enemy.id;
       }
 
+      // 吃掉金币
+      if (targetCell.hasCoin) {
+        state.score += 1;
+        targetCell.hasCoin = false;
+      }
+
       const oldCell = state.grid.cells.get(posKey(state.player.position));
       if (oldCell) {
         oldCell.entity = null;
@@ -551,10 +606,27 @@
       state.turn++;
       state.phase = GamePhase.SPAWNING;
       spawnEnemies(state);
+      spawnCoins(state);
       updatePlayerAccessiblePositions(state);
       updateThreatMap(state);
       state.phase = GamePhase.PLAYER_TURN;
       state.animating = false;
+    }
+
+    function spawnCoins(state) {
+      const emptyCells = getEmptyCells(state);
+      const shuffledEmpty = shuffle(emptyCells);
+
+      // 每回合生成 1-2 个积分地块
+      const coinCount = 1 + Math.floor(Math.random() * 2);
+
+      for (let i = 0; i < coinCount && i < shuffledEmpty.length; i++) {
+        const pos = shuffledEmpty[i];
+        const cell = state.grid.cells.get(posKey(pos));
+        if (cell && !cell.hasCoin && !cell.entity) {
+          cell.hasCoin = true;
+        }
+      }
     }
 
     function isGameOver(state) {
@@ -598,6 +670,11 @@
           stroke: '#c8905a',
           shadow: 'rgba(200, 144, 90, 0.3)',
         },
+        coin: {
+          fill: '#f5d76e',
+          stroke: '#d4b84a',
+          shadow: 'rgba(200, 180, 80, 0.4)',
+        },
       },
       text: {
         primary: '#4a4a4a',
@@ -635,6 +712,7 @@
         this.clear();
         this.drawBoardBackground();
         this.drawGrid();
+        this.drawCoins(state);
         this.drawHighlights(state);
         this.drawEntities(state);
         this.drawUI(state);
@@ -701,6 +779,45 @@
               this.ctx.fillStyle = COLORS.highlight.threatened;
               this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
             }
+          }
+        }
+      }
+
+      drawCoins(state) {
+        const startX = this.padding;
+        const startY = this.padding;
+
+        for (const cell of state.grid.cells.values()) {
+          if (cell.hasCoin) {
+            const cx = startX + cell.position.x * this.cellSize + this.cellSize / 2;
+            const cy = startY + cell.position.y * this.cellSize + this.cellSize / 2;
+            const radius = this.cellSize * 0.25;
+
+            // 阴影
+            this.ctx.fillStyle = COLORS.entity.coin.shadow;
+            this.ctx.beginPath();
+            this.ctx.arc(cx + 2, cy + 2, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            // 金币
+            this.ctx.fillStyle = COLORS.entity.coin.fill;
+            this.ctx.beginPath();
+            this.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            // 边框
+            this.ctx.strokeStyle = COLORS.entity.coin.stroke;
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            this.ctx.stroke();
+
+            // $ 符号
+            this.ctx.fillStyle = COLORS.entity.coin.stroke;
+            this.ctx.font = `bold ${radius * 1.2}px Arial`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText('$', cx, cy);
           }
         }
       }
@@ -856,18 +973,6 @@
 
         const phaseText = this.getPhaseText(state.phase);
         this.ctx.fillText(`阶段: ${phaseText}`, leftX, topY + 90);
-
-        if (isGameOver(state)) {
-          this.ctx.fillStyle = COLORS.text.accent;
-          this.ctx.font = 'bold 28px Arial';
-          this.ctx.fillText('You Died', leftX, topY + 130);
-
-          this.ctx.fillStyle = COLORS.text.secondary;
-          this.ctx.font = '14px Arial';
-          this.ctx.fillText(`最终得分: ${state.score}`, leftX, topY + 165);
-
-          this.ctx.fillText('点击页面重新开始', leftX, topY + 195);
-        }
       }
 
       getPhaseText(phase) {
@@ -947,12 +1052,24 @@
       render() {
         this.renderer.render(this.state);
         this.updateScoreDisplay();
+        this.checkGameOver();
       }
 
       updateScoreDisplay() {
         const scoreEl = document.getElementById('score-display');
         if (scoreEl) {
           scoreEl.textContent = `分数: ${this.state.score}`;
+        }
+      }
+
+      checkGameOver() {
+        if (isGameOver(this.state)) {
+          const overlay = document.getElementById('game-over-overlay');
+          const finalScore = document.getElementById('final-score');
+          if (overlay && finalScore) {
+            finalScore.textContent = `最终得分: ${this.state.score}`;
+            overlay.style.display = 'flex';
+          }
         }
       }
     }
