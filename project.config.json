@@ -1,0 +1,73 @@
+{
+  "setting": {
+    "es6": false,
+    "postcss": true,
+    "minified": false,
+    "uglifyFileName": false,
+    "enhance": false,
+    "packNpmRelationList": [],
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    },
+    "useCompilerPlugins": false,
+    "compileWorklet": false,
+    "uploadWithSourceMap": true,
+    "packNpmManually": false,
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true
+  },
+  "compileType": "game",
+  "simulatorPluginLibVersion": {},
+  "packOptions": {
+    "ignore": [
+      {
+        "value": "src",
+        "type": "folder"
+      },
+      {
+        "value": "tests",
+        "type": "folder"
+      },
+      {
+        "value": "design",
+        "type": "folder"
+      },
+      {
+        "value": "docs",
+        "type": "folder"
+      },
+      {
+        "value": ".claude",
+        "type": "folder"
+      },
+      {
+        "value": ".cursor",
+        "type": "folder"
+      },
+      {
+        "value": ".github",
+        "type": "folder"
+      },
+      {
+        "value": "demo.html",
+        "type": "file"
+      },
+      {
+        "value": "index.html",
+        "type": "file"
+      }
+    ],
+    "include": []
+  },
+  "isGameTourist": false,
+  "appid": "wx59a04cc57a8ab701",
+  "editorSetting": {},
+  "libVersion": "3.14.2"
+}

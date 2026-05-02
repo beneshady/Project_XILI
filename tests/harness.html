@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>肉鸽象棋 - Logic Harness</title>
+  <title>肉鸽象棋 · Logic Harness（只加载 GameLogic.js）</title>
   <style>
     body {
       font-family: 'Courier New', monospace;
@@ -12,16 +12,7 @@
       padding: 20px;
       color: #333;
     }
-    #output {
-      background: white;
-      border: 2px solid #ddd;
-      border-radius: 8px;
-      padding: 15px;
-      margin-top: 20px;
-      white-space: pre-wrap;
-      font-size: 14px;
-      line-height: 1.5;
-    }
+    h1 { margin: 0 0 12px; font-size: 20px; }
     .info {
       background: #e3f2fd;
       border: 2px solid #2196f3;
@@ -29,696 +20,157 @@
       padding: 15px;
       margin-bottom: 20px;
     }
+    .info code { background: #fff; padding: 2px 6px; border-radius: 3px; }
+    pre {
+      background: #fff;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      overflow: auto;
+    }
+    #output {
+      background: #fff;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 20px;
+      white-space: pre;
+      font-size: 13px;
+      line-height: 1.45;
+      max-height: 70vh;
+      overflow: auto;
+    }
+    button {
+      padding: 8px 14px;
+      margin-right: 8px;
+      border: 0;
+      border-radius: 6px;
+      background: #2196f3;
+      color: #fff;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    button:hover { background: #1976d2; }
+    label { margin-right: 10px; }
+    input[type="number"] {
+      width: 80px;
+      padding: 6px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-family: inherit;
+    }
   </style>
 </head>
 <body>
-  <h1>♔ 肉鸽象棋 - Logic Harness ♟</h1>
+  <h1>♔ 肉鸽象棋 · Logic Harness ♟</h1>
 
   <div class="info">
-    <h2>📋 使用说明</h2>
-    <p>打开浏览器开发者工具 (F12)，切换到 Console 标签页。</p>
-    <p>运行以下命令来测试游戏逻辑：</p>
-    <pre style="background: #fff; padding: 10px; border-radius: 4px;">
-testHarness()              // 初始化测试环境
-renderBoard(gameState)     // 显示当前棋盘
-handlePlayerMove(gameState, {x: 3, y: 3})  // 玩家移动
-executeEnemyTurn(gameState)  // 执行敌人回合
-isGameOver(gameState)      // 检查游戏是否结束</pre>
+    <strong>说明：</strong>本页面<b>只</b>加载 <code>js/GameLogic.js</code>，不加载 Renderer.js，
+    用于验证逻辑层无任何前端渲染依赖。打开 DevTools (F12) 控制台使用：
+<pre>GameLogic.createInitialState({ seed: 42 })
+GameLogic.handlePlayerMove(state, { x: 3, y: 3 })
+GameLogic.executeEnemyTurn(state)
+GameLogic.formatBoardAscii(state)</pre>
   </div>
 
-  <div id="output">游戏逻辑已加载，请打开控制台开始测试...</div>
+  <div>
+    <label>seed <input type="number" id="seed" value="42"></label>
+    <label>turns <input type="number" id="turns" value="40"></label>
+    <label><input type="checkbox" id="ascii" checked> 每回合打印棋盘</label>
+    <button id="run">运行 Harness</button>
+    <button id="clear">清空</button>
+  </div>
 
-  <script type="module">
-    // ============================================================================
-    // 类型定义
-    // ============================================================================
+  <div id="output">尚未运行。</div>
 
-    const EntityType = {
-      KING: 'king',
-      PAWN: 'pawn',
-      ROOK: 'rook',
-      KNIGHT: 'knight',
-    };
-
-    const Team = {
-      PLAYER: 'player',
-      ENEMY: 'enemy',
-    };
-
-    const GamePhase = {
-      PLAYER_TURN: 'player_turn',
-      ENEMY_TURN: 'enemy_turn',
-      ANIMATING: 'animating',
-      SPAWNING: 'spawning',
-      GAME_OVER: 'game_over',
-    };
-
-    // ============================================================================
-    // 工具函数
-    // ============================================================================
-
-    function posEq(a, b) {
-      return a.x === b.x && a.y === b.y;
+  <!-- 关键：此页面只加载 Model 层 -->
+  <script src="../js/GameLogic.js"></script>
+  <script>
+    // 沙箱校验：保证本 html 没有加载 Renderer.js
+    if (typeof Renderer !== 'undefined') {
+      throw new Error('[Harness] Renderer is loaded, this page must stay Model-only');
     }
 
-    function posKey(pos) {
-      return `${pos.x},${pos.y}`;
-    }
+    const $ = (id) => document.getElementById(id);
+    const out = $('output');
 
-    function posClone(pos) {
-      return { x: pos.x, y: pos.y };
-    }
+    function write(line) { out.textContent += line + '\n'; }
 
-    function isValidPos(pos, size) {
-      return pos.x >= 0 && pos.x < size && pos.y >= 0 && pos.y < size;
-    }
-
-    function sign(n) {
-      return n === 0 ? 0 : n < 0 ? -1 : 1;
-    }
-
-    let idCounter = 0;
-    function generateId() {
-      return `entity_${++idCounter}`;
-    }
-
-    function randomPos(size) {
-      return {
-        x: Math.floor(Math.random() * size),
-        y: Math.floor(Math.random() * size),
-      };
-    }
-
-    function shuffle(array) {
-      const result = [...array];
-      for (let i = result.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [result[i], result[j]] = [result[j], result[i]];
-      }
-      return result;
-    }
-
-    // ============================================================================
-    // 实体工厂
-    // ============================================================================
-
-    function createEntity(type, team, position) {
-      return {
-        id: generateId(),
-        type,
-        team,
-        position: posClone(position),
-        isDead: false,
-      };
-    }
-
-    // ============================================================================
-    // 棋盘初始化
-    // ============================================================================
-
-    function createGrid(size = 8) {
-      const grid = {
-        size,
-        cells: new Map(),
-      };
-
-      for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-          const cell = {
-            position: { x, y },
-            entity: null,
-            isPlayerAccessible: false,
-            isThreatened: false,
-          };
-          grid.cells.set(posKey({ x, y }), cell);
-        }
-      }
-
-      return grid;
-    }
-
-    // ============================================================================
-    // 游戏状态初始化
-    // ============================================================================
-
-    function createInitialState() {
-      const grid = createGrid(8);
-
-      // 创建玩家（王），随机位置
-      const playerPos = randomPos(8);
-      const player = createEntity(EntityType.KING, Team.PLAYER, playerPos);
-
-      // 将玩家放置到棋盘上
-      const playerCell = grid.cells.get(posKey(playerPos));
-      if (playerCell) {
-        playerCell.entity = player;
-      }
-
-      const state = {
-        phase: GamePhase.PLAYER_TURN,
-        turn: 1,
-        score: 0,
-        grid,
-        entities: new Map([[player.id, player]]),
-        player,
-        enemies: [],
-        animating: false,
-        animationQueue: [],
-      };
-
-      // 计算玩家可移动范围
-      updatePlayerAccessiblePositions(state);
-
-      return state;
-    }
-
-    // ============================================================================
-    // 获取空格子
-    // ============================================================================
-
-    function getEmptyCells(state) {
-      const empty = [];
-      for (const [key, cell] of state.grid.cells) {
-        if (cell.entity === null) {
-          empty.push(posClone(cell.position));
-        }
-      }
-      return empty;
-    }
-
-    // ============================================================================
-    // 玩家可移动范围计算
-    // ============================================================================
-
-    function updatePlayerAccessiblePositions(state) {
+    function pickMove(state) {
+      const accessible = [];
       for (const cell of state.grid.cells.values()) {
-        cell.isPlayerAccessible = false;
-      }
-
-      if (!state.player) return;
-
-      const { x, y } = state.player.position;
-
-      const directions = [
-        { dx: -1, dy: -1 }, { dx: 0, dy: -1 }, { dx: 1, dy: -1 },
-        { dx: -1, dy: 0 },  { dx: 0, dy: 0 },  { dx: 1, dy: 0 },
-        { dx: -1, dy: 1 },  { dx: 0, dy: 1 },  { dx: 1, dy: 1 },
-      ];
-
-      for (const dir of directions) {
-        const newPos = { x: x + dir.dx, y: y + dir.dy };
-        if (isValidPos(newPos, state.grid.size)) {
-          const key = posKey(newPos);
-          const cell = state.grid.cells.get(key);
-          if (cell) {
-            cell.isPlayerAccessible = true;
-          }
+        if (cell.isPlayerAccessible && cell.entity !== state.player) {
+          accessible.push(cell);
         }
       }
+      if (accessible.length === 0) return null;
+
+      const captures = accessible.filter(c =>
+        c.entity && c.entity.team === GameLogic.Team.ENEMY && !c.isThreatened);
+      if (captures.length) return captures[Math.floor(state.rng() * captures.length)].position;
+
+      const coins = accessible.filter(c => c.hasCoin && !c.isThreatened);
+      if (coins.length) return coins[Math.floor(state.rng() * coins.length)].position;
+
+      const safe = accessible.filter(c => !c.isThreatened && !c.entity);
+      if (safe.length) return safe[Math.floor(state.rng() * safe.length)].position;
+
+      return accessible[Math.floor(state.rng() * accessible.length)].position;
     }
 
-    function getPlayerAccessiblePositions(state) {
-      const positions = [];
-      for (const cell of state.grid.cells.values()) {
-        if (cell.isPlayerAccessible) {
-          positions.push(posClone(cell.position));
+    function runHarness() {
+      out.textContent = '';
+      const seed  = Number($('seed').value) || 42;
+      const turns = Number($('turns').value) || 40;
+      const ascii = $('ascii').checked;
+
+      write(`[Harness] seed=${seed} turns=${turns} ascii=${ascii}`);
+      write('='.repeat(72));
+
+      const state = GameLogic.createInitialState({ seed });
+      if (ascii) {
+        write(GameLogic.formatBoardAscii(state));
+        write('-'.repeat(72));
+      }
+
+      let played = 0;
+      for (let t = 0; t < turns; t++) {
+        if (GameLogic.isGameOver(state)) break;
+        const target = pickMove(state);
+        if (!target) { write('[Harness] no move, aborting'); break; }
+        if (!GameLogic.handlePlayerMove(state, target)) break;
+        GameLogic.executeEnemyTurn(state);
+        played++;
+        if (ascii) {
+          write(GameLogic.formatBoardAscii(state));
+          write('-'.repeat(72));
         }
       }
-      return positions;
+
+      write('='.repeat(72));
+      write('[Harness] event log:');
+      for (const line of state.log) write('  ' + line);
+
+      write('='.repeat(72));
+      const unlocked = Object.entries(state.skills).filter(([,lv]) => lv > 0)
+        .map(([id,lv]) => `${id} Lv.${lv}`).join(', ') || '(none)';
+      write('[Harness] summary:');
+      write(`  played turns : ${played}`);
+      write(`  final turn   : ${state.turn}`);
+      write(`  final phase  : ${state.phase}`);
+      write(`  final score  : ${state.score}`);
+      write(`  enemies alive: ${state.enemies.filter(e => !e.isDead).length}`);
+      write(`  unlocked     : ${unlocked}`);
+      write(`  game over    : ${GameLogic.isGameOver(state)}`);
+      if (state.deathMessage) write(`  death reason : ${state.deathMessage}`);
+
+      // 暴露给控制台手动操作
+      window.state = state;
+      console.log('[Harness] window.state 已注入，可在控制台继续操作');
     }
 
-    // ============================================================================
-    // 威胁范围计算
-    // ============================================================================
-
-    function getThreatRange(entity, grid) {
-      switch (entity.type) {
-        case EntityType.PAWN:
-          return [];
-        case EntityType.ROOK:
-          return getRookThreat(entity, grid);
-        case EntityType.KNIGHT:
-          return getKnightThreat(entity, grid);
-        default:
-          return [];
-      }
-    }
-
-    function getRookThreat(entity, grid) {
-      const threats = [];
-      const directions = [
-        { dx: 0, dy: -1 }, { dx: 0, dy: 1 },
-        { dx: -1, dy: 0 }, { dx: 1, dy: 0 },
-      ];
-
-      for (const dir of directions) {
-        let pos = posClone(entity.position);
-
-        while (true) {
-          pos.x += dir.dx;
-          pos.y += dir.dy;
-
-          if (!isValidPos(pos, grid.size)) break;
-
-          threats.push(posClone(pos));
-
-          const cell = grid.cells.get(posKey(pos));
-          if (cell && cell.entity) {
-            break;
-          }
-        }
-      }
-
-      return threats;
-    }
-
-    function getKnightThreat(entity, grid) {
-      const moves = [
-        { dx: 1, dy: -2 }, { dx: 2, dy: -1 },
-        { dx: 2, dy: 1 },  { dx: 1, dy: 2 },
-        { dx: -1, dy: 2 }, { dx: -2, dy: 1 },
-        { dx: -2, dy: -1 }, { dx: -1, dy: -2 },
-      ];
-
-      return moves
-        .map(m => ({
-          x: entity.position.x + m.dx,
-          y: entity.position.y + m.dy,
-        }))
-        .filter(pos => isValidPos(pos, grid.size));
-    }
-
-    // ============================================================================
-    // 更新威胁地图
-    // ============================================================================
-
-    function updateThreatMap(state) {
-      for (const cell of state.grid.cells.values()) {
-        cell.isThreatened = false;
-      }
-
-      if (!state.player) return;
-
-      for (const enemy of state.enemies) {
-        if (enemy.isDead) continue;
-
-        let threats = [];
-
-        if (enemy.type === EntityType.PAWN) {
-          const dx = state.player.position.x - enemy.position.x;
-          const dy = state.player.position.y - enemy.position.y;
-          const step = {
-            x: enemy.position.x + sign(dx),
-            y: enemy.position.y + sign(dy),
-          };
-
-          if (isValidPos(step, state.grid.size)) {
-            threats.push(step);
-          }
-        } else {
-          threats = getThreatRange(enemy, state.grid);
-        }
-
-        for (const threat of) {
-          const cell = state.grid.cells.get(posKey(threat));
-          if (cell) {
-            cell.isThreatened = true;
-          }
-        }
-
-        enemy.threatRange = threats;
-      }
-    }
-
-    // ============================================================================
-    // AI 决策
-    // ============================================================================
-
-    function calculateEnemyMoves(state) {
-      if (!state.player) return;
-
-      for (const enemy of state.enemies) {
-        if (enemy.isDead) continue;
-
-        const dx = state.player.position.x - enemy.position.x;
-        const dy = state.player.position.y - enemy.position.y;
-
-        let step;
-
-        if (enemy.type === EntityType.ROOK && Math.abs(dx) > Math.abs(dy)) {
-          step = {
-            x: enemy.position.x + sign(dx),
-            y: enemy.position.y,
-          };
-        } else if (enemy.type === EntityType.ROOK && Math.abs(dx) < Math.abs(dy)) {
-          step = {
-            x: enemy.position.x,
-            y: enemy.position.y + sign(dy),
-          };
-        } else {
-          step = {
-            x: enemy.position.x + sign(dx),
-            y: enemy.position.y + sign(dy),
-          };
-        }
-
-        if (!isValidPos(step, state.grid.size)) {
-          if (dx !== 0) {
-            step = { x: enemy.position.x + sign(dx), y: enemy.position.y };
-          } else {
-            step = { x: enemy.position.x, y: enemy.position.y + sign(dy) };
-          }
-        }
-
-        enemy.nextMove = step;
-      }
-    }
-
-    // ============================================================================
-    // 敌人生成
-    // ============================================================================
-
-    function spawnEnemies(state) {
-      const turn = state.turn;
-      const emptyCells = getEmptyCells(state);
-      const shuffledEmpty = shuffle(emptyCells);
-
-      let posIndex = 0;
-
-      const pawnCount = 1 + Math.floor(Math.random() * 2);
-      for (let i = 0; i < pawnCount && posIndex < shuffledEmpty.length; i++) {
-        const pos = shuffledEmpty[posIndex++];
-        const pawn = createEntity(EntityType.PAWN, Team.ENEMY, pos);
-        state.entities.set(pawn.id, pawn);
-        state.enemies.push(pawn);
-
-        const cell = state.grid.cells.get(posKey(pos));
-        if (cell) {
-          cell.entity = pawn;
-        }
-      }
-
-      if (turn >= 5 && Math.random() < 0.5 && posIndex < shuffledEmpty.length) {
-        const pos = shuffledEmpty[posIndex++];
-        const knight = createEntity(EntityType.KNIGHT, Team.ENEMY, pos);
-        state.entities.set(knight.id, knight);
-        state.enemies.push(knight);
-
-        const cell = state.grid.cells.get(posKey(pos));
-        if (cell) {
-          cell.entity = knight;
-        }
-      }
-
-      if (turn >= 10 && Math.random() < 0.5 && posIndex < shuffledEmpty.length) {
-        const pos = shuffledEmpty[posIndex++];
-        const rook = createEntity(EntityType.ROOK, Team.ENEMY, pos);
-        state.entities.set(rook.id, rook);
-        state.enemies.push(rook);
-
-        const cell = state.grid.cells.get(posKey(pos));
-        if (cell) {
-          cell.entity = rook;
-        }
-      }
-    }
-
-    // ============================================================================
-    // 玩家移动
-    // ============================================================================
-
-    function handlePlayerMove(state, targetPos) {
-      if (state.phase !== GamePhase.PLAYER_TURN) {
-        console.error('Cannot move: not player turn');
-        return;
-      }
-
-      if (!state.player) {
-        console.error('Cannot move: no player entity');
-        return;
-      }
-
-      const targetCell = state.grid.cells.get(posKey(targetPos));
-      if (!targetCell || !targetCell.isPlayerAccessible) {
-        console.error('Cannot move: target position not accessible');
-        return;
-      }
-
-      const animAction = {
-        type: 'move',
-        entityId: state.player.id,
-        from: posClone(state.player.position),
-        to: posClone(targetPos),
-      };
-
-      if (targetCell.entity && targetCell.entity.team === Team.ENEMY) {
-        const enemy = targetCell.entity;
-        enemy.isDead = true;
-        state.score++;
-
-        animAction.type = 'die';
-        animAction.entityId = enemy.id;
-      }
-
-      const oldCell = state.grid.cells.get(posKey(state.player.position));
-      if (oldCell) {
-        oldCell.entity = null;
-      }
-
-      state.player.position = posClone(targetPos);
-      targetCell.entity = state.player;
-
-      calculateEnemyMoves(state);
-
-      state.phase = GamePhase.ENEMY_TURN;
-      state.animating = true;
-      state.animationQueue.push(animAction);
-    }
-
-    // ============================================================================
-    // 敌人回合执行
-    // ============================================================================
-
-    function executeEnemyTurn(state) {
-      if (!state.player) return;
-
-      let playerDead = false;
-      let killer = null;
-
-      for (const enemy of state.enemies) {
-        if (enemy.isDead) continue;
-
-        for (const threat of enemy.threatRange || []) {
-          if (posEq(threat, state.player.position)) {
-            playerDead = true;
-            killer = enemy;
-            break;
-          }
-        }
-
-        if (playerDead) break;
-
-        if (enemy.nextMove) {
-          const oldCell = state.grid.cells.get(posKey(enemy.position));
-          if (oldCell) {
-            oldCell.entity = null;
-          }
-
-          const newCell = state.grid.cells.get(posKey(enemy.nextMove));
-          if (newCell) {
-            newCell.entity = enemy;
-            enemy.position = posClone(enemy.nextMove);
-          }
-        }
-      }
-
-      if (playerDead) {
-        state.player.isDead = true;
-        state.phase = GamePhase.GAME_OVER;
-        state.isVictory = false;
-        state.deathMessage = `被 ${killer?.type || '敌人'} 击杀于 ${state.player.position.x},${state.player.position.y}`;
-        return;
-      }
-
-      state.turn++;
-      state.phase = GamePhase.SPAWNING;
-      spawnEnemies(state);
-      updatePlayerAccessiblePositions(state);
-      updateThreatMap(state);
-      state.phase = GamePhase.PLAYER_TURN;
-      state.animating = false;
-    }
-
-    // ============================================================================
-    // 游戏结束检测
-    // ============================================================================
-
-    function isGameOver(state) {
-      return state.phase === GamePhase.GAME_OVER;
-    }
-
-    // ============================================================================
-    // 可视化
-    // ============================================================================
-
-    function renderBoard(state) {
-      let output = '\n';
-      output += `  回合: ${state.turn}  分数: ${state.score}  阶段: ${state.phase}\n`;
-      output += '  +------------------------+\n';
-
-      for (let y = 0; y < 8; y++) {
-        output += '  |';
-        for (let x = 0; x < 8; x++) {
-          const key = `${x},${y}`;
-          const cell = state.grid.cells.get(key);
-          let char = '·';
-
-          if (cell?.entity) {
-            const entity = cell.entity;
-            if (entity.team === 'player') {
-              char = '♔';
-            } else if (entity.type === 'pawn') {
-              char = '♟';
-            } else if (entity.type === 'rook') {
-              char = '♜';
-            } else if (entity.type === 'knight') {
-              char = '♞';
-            }
-          } else if (cell?.isThreatened) {
-            char = '×';
-          } else if (cell?.isPlayerAccessible) {
-            char = '○';
-          }
-
-          output += ` ${char} `;
-        }
-        output += '|\n';
-      }
-
-      output += '  +------------------------+\n';
-      output += '  图例: ♔=玩家 ♟=兵 ♜=车 ♞=马 ×=威胁 ○=可移动 ·=空\n';
-
-      if (state.enemies.length > 0) {
-        output += '\n  敌人列表:\n';
-        for (const enemy of state.enemies) {
-          if (enemy.isDead) continue;
-          const typeName = enemy.type.toUpperCase();
-          output += `    ${typeName} at (${enemy.position.x},${enemy.position.y})\n`;
-        }
-      }
-
-      if (isGameOver(state)) {
-        output += `\n  💀 游戏结束: ${state.deathMessage}\n`;
-      }
-
-      return output;
-    }
-
-    // ============================================================================
-    // 导出测试函数
-    // ============================================================================
-
-    window.testHarness = function() {
-      console.log('=== 肉鸽象棋游戏逻辑测试 ===\n');
-
-      const state = createInitialState();
-      console.log('游戏初始化完成！');
-      console.log(renderBoard(state));
-
-      const accessible = getPlayerAccessiblePositions(state);
-      console.log(`玩家可移动范围 (${accessible.length} 个格子):`);
-      console.log(accessible.map(p => `(${p.x},${p.y})`).join(', '));
-      console.log('');
-
-      const empty = getEmptyCells(state);
-      console.log(`空格子数量: ${empty.length}`);
-
-      window.gameState = state;
-      window.renderBoard = renderBoard;
-      window.getPlayerAccessiblePositions = getPlayerAccessiblePositions;
-      window.getEmptyCells = getEmptyCells;
-      window.handlePlayerMove = handlePlayerMove;
-      window.executeEnemyTurn = executeEnemyTurn;
-      window.isGameOver = isGameOver;
-      window.posKey = posKey;
-
-      console.log('\n=== 可用命令 ===');
-      console.log('renderBoard(gameState)              - 显示当前棋盘');
-      console.log('handlePlayerMove(gameState, {x, y})  - 玩家移动到 (x,y)');
-      console.log('executeEnemyTurn(gameState)        - 执行敌人回合');
-      console.log('isGameOver(gameState)               - 检查游戏是否结束');
-      console.log('');
-      console.log('示例: handlePlayerMove(gameState, {x: 4, y: 4})');
-      console.log('然后: renderBoard(gameState)');
-    };
-
-    window.runAutomatedTests = function() {
-      console.log('=== 运行自动化测试 ===\n');
-
-      let passed = 0;
-      let failed = 0;
-
-      {
-        const state = createInitialState();
-        if (state.player && state.enemies.length === 0 && state.score === 0) {
-          console.log('✓ 测试 1: 游戏初始化 - 通过');
-          passed++;
-        } else {
-          console.log('✗ 测试 1: 游戏初始化 - 失败');
-          failed++;
-        }
-      }
-
-      {
-        const state = createInitialState();
-        const accessible = getPlayerAccessiblePositions(state);
-        if (accessible.length <= 9 && accessible.length >= 1) {
-          console.log('✓ 测试 2: 玩家可移动范围 - 通过');
-          passed++;
-        } else {
-          console.log('✗ 测试 2: 玩家可移动范围 - 失败');
-          failed++;
-        }
-      }
-
-      {
-        const state = createInitialState();
-        const empty = getEmptyCells(state);
-        if (empty.length === 63) {
-          console.log('✓ 测试 3: 空格子检测 - 通过');
-          passed++;
-        } else {
-          console.log('✗ 测试 3: 空格子检测 - 失败');
-          failed++;
-        }
-      }
-
-      {
-        const state = createInitialState();
-        updateThreatMap(state);
-        let hasThreat = false;
-        for (const cell of state.grid.cells.values()) {
-          if (cell.isThreatened) {
-            hasThreat = true;
-            break;
-          }
-        }
-        if (!hasThreat) {
-          console.log('✓ 测试 4: 威胁范围计算 - 通过');
-          passed++;
-        } else {
-          console.log('✗ 测试 4: 威胁范围计算 - 失败');
-          failed++;
-        }
-      }
-
-      console.log(`\n测试结果: ${passed} 通过, ${failed} 失败`);
-      return { passed, failed };
-    };
-
-    console.log('=== 准备就绪 ===');
-    console.log('运行 testHarness() 开始交互式测试');
-    console.log('运行 runAutomatedTests() 运行自动化测试');
+    $('run').addEventListener('click', runHarness);
+    $('clear').addEventListener('click', () => { out.textContent = ''; });
   </script>
 </body>
 </html>

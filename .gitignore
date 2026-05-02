@@ -2,6 +2,7 @@
 .vs/
 .vscode/settings.json
 .idea/
+.cursor/
 *.swp
 *.swo
 *~
@@ -32,6 +33,12 @@ dist/
 *.so
 *.dylib
 *.app
+
+# === Engine: Cocos Creator ===
+temp/
+library/
+local/
+native/
 
 # === Engine: Godot ===
 .godot/

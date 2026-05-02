@@ -1,9 +1,5 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "statusLine": {
-    "type": "command",
-    "command": "bash .claude/statusline.sh"
-  },
   "permissions": {
     "allow": [
       "Bash(git status*)",
@@ -15,7 +11,13 @@
       "Bash(dir *)",
       "Bash(python -m json.tool*)",
       "Bash(python -m pytest*)",
-      "Bash(py -m pytest*)"
+      "Bash(py -m pytest*)",
+      "Bash(cmd //c \"mklink /J src\\\\\\\\core_shared ..\\\\\\\\..\\\\\\\\shared\")",
+      "Read(//c/Users/60191/Documents/AI_Coding/Project_XILI/Chess_rougue/src/**)",
+      "Bash(cmd //c \"dir c:\\\\\\\\Users\\\\\\\\60191\\\\\\\\Documents\\\\\\\\AI_Coding\\\\\\\\Project_XILI\\\\\\\\Chess_rougue\\\\\\\\src\\\\\\\\core_shared\")",
+      "Bash(cmd //c \"rmdir c:\\\\\\\\Users\\\\\\\\60191\\\\\\\\Documents\\\\\\\\AI_Coding\\\\\\\\Project_XILI\\\\\\\\Chess_rougue\\\\\\\\src\\\\\\\\core_shared\")",
+      "Bash(node sync-shared.js)",
+      "Bash(npx tsc *)"
     ],
     "deny": [
       "Bash(rm -rf *)",
@@ -114,5 +116,9 @@
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash .claude/statusline.sh"
   }
 }
