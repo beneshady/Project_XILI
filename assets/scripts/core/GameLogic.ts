@@ -3,7 +3,6 @@
 // ----------------------------------------------------------------------------
 // 合并自 src/core/game.ts + demo.html 完整逻辑：
 // - 技能系统（5个技能）
-// - 金币系统
 // - 高级敌人生成（上限/渐进概率）
 // - 马脚绊逻辑
 // - 连杀+差异化得分
@@ -75,7 +74,6 @@ export function createGrid(size: number = GRID_SIZE): Grid {
       const cell: Cell = {
         position: { x, y },
         entity: null,
-        hasCoin: false,
         isPlayerAccessible: false,
         isThreatened: false,
       };
@@ -445,26 +443,7 @@ export function spawnEnemies(state: GameState): void {
 }
 
 // ============================================================================
-// 金币生成
-// ============================================================================
-
-export function spawnCoins(state: GameState): void {
-  const emptyCells = getEmptyCells(state);
-  const shuffledEmpty = shuffle(emptyCells);
-
-  const coinCount = 1 + Math.floor(Math.random() * 2);
-
-  for (let i = 0; i < coinCount && i < shuffledEmpty.length; i++) {
-    const pos = shuffledEmpty[i];
-    const cell = state.grid.cells.get(posKey(pos));
-    if (cell && !cell.hasCoin && !cell.entity) {
-      cell.hasCoin = true;
-    }
-  }
-}
-
-// ============================================================================
-// 玩家移动（含技能/金币/连杀）
+// 玩家移动（含技能/连杀）
 // ============================================================================
 
 export interface MoveResult {
@@ -472,13 +451,12 @@ export interface MoveResult {
   killedEnemyId?: string;
   killedEnemyType?: EntityType;
   scoreGained: number;
-  coinCollected: boolean;
   castlingUsed: boolean;
   skillAcquired: string[];
 }
 
 export function handlePlayerMove(state: GameState, targetPos: { x: number; y: number }): MoveResult {
-  const result: MoveResult = { moved: false, scoreGained: 0, coinCollected: false, castlingUsed: false, skillAcquired: [] };
+  const result: MoveResult = { moved: false, scoreGained: 0, castlingUsed: false, skillAcquired: [] };
 
   if (state.phase !== GamePhase.PLAYER_TURN || !state.player) return result;
 
@@ -514,14 +492,6 @@ export function handlePlayerMove(state: GameState, targetPos: { x: number; y: nu
 
   if (!killedEnemy) {
     state.killStreak = 0;
-  }
-
-  // 吃金币
-  if (targetCell.hasCoin) {
-    state.score += SCORE_CONFIG.coinPickup;
-    result.scoreGained += SCORE_CONFIG.coinPickup;
-    targetCell.hasCoin = false;
-    result.coinCollected = true;
   }
 
   // 从旧位置移除
@@ -649,7 +619,6 @@ export function executeEnemyTurn(state: GameState): EnemyTurnResult {
 
   state.phase = GamePhase.SPAWNING;
   spawnEnemies(state);
-  spawnCoins(state);
   updatePlayerAccessiblePositions(state);
   updateThreatMap(state);
   state.phase = GamePhase.PLAYER_TURN;
@@ -685,8 +654,6 @@ export function formatBoardAscii(state: GameState): string {
       const cell = state.grid.cells.get(posKey({ x, y }));
       if (cell?.entity) {
         row += symbols[cell.entity.type] || '?';
-      } else if (cell?.hasCoin) {
-        row += '$';
       } else {
         row += '.';
       }

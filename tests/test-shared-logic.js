@@ -37,7 +37,7 @@ function assertEq(actual, expected, message) {
 
 // ---- Types (as runtime objects) ----
 const EntityType = {
-  KING: 'king', PAWN: 'pawn', ROOK: 'rook', KNIGHT: 'knight', COIN: 'coin',
+  KING: 'king', PAWN: 'pawn', ROOK: 'rook', KNIGHT: 'knight',
 };
 const Team = { PLAYER: 'player', ENEMY: 'enemy', ITEM: 'item' };
 const GamePhase = {
@@ -75,7 +75,7 @@ function createGrid(size = 8) {
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       grid.cells.set(posKey({ x, y }), {
-        position: { x, y }, entity: null, hasCoin: false,
+        position: { x, y }, entity: null,
         isPlayerAccessible: false, isThreatened: false,
       });
     }
@@ -209,7 +209,6 @@ assertEq(grid.cells.size, 64, 'grid has 64 cells');
 const cell00 = grid.cells.get('0,0');
 assert(cell00 !== undefined, 'cell (0,0) exists');
 assert(cell00.entity === null, 'cell starts empty');
-assert(cell00.hasCoin === false, 'cell starts without coin');
 assert(cell00.isPlayerAccessible === false, 'cell starts not accessible');
 assert(cell00.isThreatened === false, 'cell starts not threatened');
 

@@ -226,7 +226,6 @@ export class GameController extends Component {
         this.entityGfx.clear();
         this.drawBoard();
         this.drawHighlights();
-        this.drawCoins();
         this.drawEntities();
         this.updateUI();
     }
@@ -305,34 +304,11 @@ export class GameController extends Component {
         }
     }
 
-    private drawCoins() {
-        const gfx = this.entityGfx;
-
-        for (let gy = 0; gy < GRID_SIZE; gy++) {
-            for (let gx = 0; gx < GRID_SIZE; gx++) {
-                const cell = this.state.grid.cells.get(posKey({ x: gx, y: gy }));
-                if (!cell || !cell.hasCoin) continue;
-
-                const cx = this.boardOriginX + gx * this.cellSize + this.cellSize / 2;
-                const cy = this.boardOriginY + (GRID_SIZE - 1 - gy) * this.cellSize + this.cellSize / 2;
-                const r = this.cellSize * 0.25;
-
-                gfx.fillColor = hexColor(COLORS.entity.coin.fill);
-                gfx.strokeColor = hexColor(COLORS.entity.coin.stroke);
-                gfx.lineWidth = 2;
-                gfx.circle(cx, cy, r);
-                gfx.fill();
-                gfx.stroke();
-            }
-        }
-    }
-
     private drawEntities() {
         const gfx = this.entityGfx;
 
         for (const [, entity] of this.state.entities) {
             if (entity.isDead) continue;
-            if (entity.type === EntityType.COIN) continue;
 
             const gx = entity.position.x;
             const gy = entity.position.y;

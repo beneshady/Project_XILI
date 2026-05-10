@@ -12,7 +12,6 @@ export enum EntityType {
   PAWN = 'pawn',
   ROOK = 'rook',
   KNIGHT = 'knight',
-  COIN = 'coin',
 }
 
 export enum Team {
@@ -34,7 +33,6 @@ export interface Entity {
 export interface Cell {
   position: Position;
   entity: Entity | null;
-  hasCoin: boolean;
   isPlayerAccessible: boolean;
   isThreatened: boolean;
 }

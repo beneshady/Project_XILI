@@ -23,7 +23,6 @@ export const COLORS = {
     pawn: { fill: '#98c4b8', stroke: '#78a498', shadow: 'rgba(120, 164, 152, 0.3)' },
     rook: { fill: '#e39b7e', stroke: '#c37b5e', shadow: 'rgba(195, 123, 94, 0.3)' },
     knight: { fill: '#e8b07a', stroke: '#c8905a', shadow: 'rgba(200, 144, 90, 0.3)' },
-    coin: { fill: '#f5d76e', stroke: '#d4b84a', shadow: 'rgba(200, 180, 80, 0.4)' },
   },
   text: {
     primary: '#4a4a4a',
@@ -47,7 +46,6 @@ export const ENTITY_NAMES = {
   PAWN: '兵',
   ROOK: '车',
   KNIGHT: '马',
-  COIN: '币',
 } as const;
 
 // 敌人生成配置
@@ -73,7 +71,6 @@ export const SCORE_CONFIG = {
   pawnKill: 1,
   knightKill: 3,
   rookKill: 5,
-  coinPickup: 1,
   maxKillStreak: 3,
   deadCleanupInterval: 10,
 } as const;

@@ -109,9 +109,6 @@ GameLogic.formatBoardAscii(state)</pre>
         c.entity && c.entity.team === GameLogic.Team.ENEMY && !c.isThreatened);
       if (captures.length) return captures[Math.floor(state.rng() * captures.length)].position;
 
-      const coins = accessible.filter(c => c.hasCoin && !c.isThreatened);
-      if (coins.length) return coins[Math.floor(state.rng() * coins.length)].position;
-
       const safe = accessible.filter(c => !c.isThreatened && !c.entity);
       if (safe.length) return safe[Math.floor(state.rng() * safe.length)].position;
 

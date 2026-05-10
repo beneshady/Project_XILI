@@ -50,9 +50,6 @@ function pickMove(state) {
   const captures = accessible.filter(c => c.entity && c.entity.team === GameLogic.Team.ENEMY && !c.isThreatened);
   if (captures.length > 0) return captures[Math.floor(rng() * captures.length)].position;
 
-  const coins = accessible.filter(c => c.hasCoin && !c.isThreatened);
-  if (coins.length > 0) return coins[Math.floor(rng() * coins.length)].position;
-
   const safe = accessible.filter(c => !c.isThreatened && !c.entity);
   if (safe.length > 0) return safe[Math.floor(rng() * safe.length)].position;
 
