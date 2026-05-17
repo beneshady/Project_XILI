@@ -21,8 +21,8 @@ export function posClone(pos: Position): Position {
   return { x: pos.x, y: pos.y };
 }
 
-export function isValidPos(pos: Position, size: number): boolean {
-  return pos.x >= 0 && pos.x < size && pos.y >= 0 && pos.y < size;
+export function isValidPos(pos: Position, width: number, height: number = width): boolean {
+  return pos.x >= 0 && pos.x < width && pos.y >= 0 && pos.y < height;
 }
 
 export function manhattanDistance(a: Position, b: Position): number {
@@ -48,10 +48,10 @@ export function resetIdCounter(): void {
   idCounter = 0;
 }
 
-export function randomPos(size: number): Position {
+export function randomPos(width: number, height: number = width): Position {
   return {
-    x: Math.floor(Math.random() * size),
-    y: Math.floor(Math.random() * size),
+    x: Math.floor(Math.random() * width),
+    y: Math.floor(Math.random() * height),
   };
 }
 
@@ -64,10 +64,10 @@ export function shuffle<T>(array: T[]): T[] {
   return result;
 }
 
-export function getAllPositions(size: number): Position[] {
+export function getAllPositions(width: number, height: number = width): Position[] {
   const positions: Position[] = [];
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
       positions.push({ x, y });
     }
   }

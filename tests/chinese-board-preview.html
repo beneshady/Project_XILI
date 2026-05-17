@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>肉鸽象棋 · 棋盘样式预览</title>
+  <style>
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: #f8efe0;
+      color: #3f2b1f;
+      font-family: Arial, "Microsoft YaHei", sans-serif;
+    }
+    body {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+    main {
+      display: grid;
+      gap: 14px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.2;
+    }
+    canvas {
+      width: min(92vw, 760px);
+      height: auto;
+      border: 1px solid rgba(80, 45, 20, 0.22);
+      background: #f8efe0;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>肉鸽象棋 · A+C 棋子与 9x10 棋盘预览</h1>
+    <canvas id="board" width="900" height="980" aria-label="中国象棋棋盘预览"></canvas>
+  </main>
+  <script>
+    const BOARD_WIDTH = 9;
+    const BOARD_HEIGHT = 10;
+    const COLORS = {
+      background: '#f8efe0',
+      board: {
+        background: '#f4dfb8',
+        grid: '#8b5a2b',
+        riverText: '#9b6a37',
+        palace: '#b47a3c',
+      },
+      highlight: {
+        accessible: 'rgba(70, 150, 95, 0.24)',
+        threatened: 'rgba(198, 54, 48, 0.28)',
+      },
+      entity: {
+        player: { fill: '#f7d79b', stroke: '#b7332f', shadow: 'rgba(183, 51, 47, 0.35)', text: '#a32220' },
+        soldier: { fill: '#f3d2a4', stroke: '#6f3d25', shadow: 'rgba(111, 61, 37, 0.28)', text: '#34251d' },
+        rook: { fill: '#e7b16f', stroke: '#8f3c2d', shadow: 'rgba(143, 60, 45, 0.32)', text: '#3f2418' },
+        knight: { fill: '#edc77d', stroke: '#9a6429', shadow: 'rgba(154, 100, 41, 0.3)', text: '#352315' },
+        cannon: { fill: '#e98663', stroke: '#a9362d', shadow: 'rgba(169, 54, 45, 0.36)', text: '#2f1b17' },
+        elephant: { fill: '#d7bd83', stroke: '#7f6840', shadow: 'rgba(127, 104, 64, 0.28)', text: '#2d2518' },
+        advisor: { fill: '#d9c49c', stroke: '#74614a', shadow: 'rgba(116, 97, 74, 0.28)', text: '#2d241c' },
+        general: { fill: '#c8463f', stroke: '#7d211f', shadow: 'rgba(125, 33, 31, 0.38)', text: '#fff3dd' },
+      },
+    };
+
+    const canvas = document.getElementById('board');
+    const ctx = canvas.getContext('2d');
+    const padding = 86;
+    const cell = 82;
+    const origin = { x: padding, y: padding };
+    const boardW = cell * (BOARD_WIDTH - 1);
+    const boardH = cell * (BOARD_HEIGHT - 1);
+
+    const pieces = [
+      { x: 4, y: 9, type: 'player', text: '帅' },
+      { x: 0, y: 3, type: 'soldier', text: '兵' },
+      { x: 2, y: 3, type: 'soldier', text: '兵' },
+      { x: 6, y: 3, type: 'soldier', text: '兵' },
+      { x: 8, y: 3, type: 'soldier', text: '兵' },
+      { x: 1, y: 2, type: 'cannon', text: '炮' },
+      { x: 7, y: 2, type: 'cannon', text: '炮' },
+      { x: 0, y: 0, type: 'rook', text: '车' },
+      { x: 1, y: 0, type: 'knight', text: '马' },
+      { x: 2, y: 0, type: 'elephant', text: '象' },
+      { x: 3, y: 0, type: 'advisor', text: '士' },
+      { x: 4, y: 0, type: 'general', text: '将' },
+      { x: 5, y: 0, type: 'advisor', text: '士' },
+      { x: 6, y: 0, type: 'elephant', text: '象' },
+      { x: 7, y: 0, type: 'knight', text: '马' },
+      { x: 8, y: 0, type: 'rook', text: '车' },
+    ];
+
+    function point(x, y) {
+      return { x: origin.x + x * cell, y: origin.y + y * cell };
+    }
+
+    function drawBoard() {
+      ctx.fillStyle = COLORS.background;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = COLORS.board.background;
+      ctx.fillRect(origin.x - cell * 0.5, origin.y - cell * 0.5, boardW + cell, boardH + cell);
+
+      ctx.strokeStyle = COLORS.board.grid;
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      for (let y = 0; y < BOARD_HEIGHT; y++) {
+        const p = point(0, y);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(origin.x + boardW, p.y);
+        ctx.stroke();
+      }
+      for (let x = 0; x < BOARD_WIDTH; x++) {
+        const top = point(x, 0);
+        const riverTop = point(x, 4);
+        const riverBottom = point(x, 5);
+        const bottom = point(x, 9);
+        ctx.beginPath();
+        ctx.moveTo(top.x, top.y);
+        ctx.lineTo(riverTop.x, riverTop.y);
+        ctx.moveTo(riverBottom.x, riverBottom.y);
+        ctx.lineTo(bottom.x, bottom.y);
+        ctx.stroke();
+      }
+
+      drawPalace(0);
+      drawPalace(7);
+
+      ctx.fillStyle = COLORS.board.riverText;
+      ctx.font = `bold ${Math.floor(cell * 0.46)}px KaiTi, SimSun, serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('楚 河', origin.x + cell * 2, origin.y + cell * 4.5);
+      ctx.fillText('汉 界', origin.x + cell * 6, origin.y + cell * 4.5);
+    }
+
+    function drawPalace(topRow) {
+      const a = point(3, topRow);
+      const b = point(5, topRow);
+      const c = point(3, topRow + 2);
+      const d = point(5, topRow + 2);
+      ctx.strokeStyle = COLORS.board.palace;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(d.x, d.y);
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.stroke();
+    }
+
+    function drawPiece(piece) {
+      const p = point(piece.x, piece.y);
+      const style = COLORS.entity[piece.type];
+      const r = cell * 0.38;
+      ctx.fillStyle = style.shadow;
+      ctx.beginPath();
+      ctx.arc(p.x + 4, p.y + 5, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = style.fill;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = style.stroke;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r * 0.78, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = style.text;
+      ctx.font = `bold ${Math.floor(cell * 0.34)}px KaiTi, SimSun, serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(piece.text, p.x, p.y + 2);
+    }
+
+    drawBoard();
+    ctx.fillStyle = COLORS.highlight.accessible;
+    for (const p of [{ x: 3, y: 8 }, { x: 4, y: 8 }, { x: 5, y: 8 }]) {
+      const pt = point(p.x, p.y);
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, cell * 0.32, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = COLORS.highlight.threatened;
+    for (const p of [{ x: 4, y: 4 }, { x: 4, y: 5 }, { x: 4, y: 6 }]) {
+      const pt = point(p.x, p.y);
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, cell * 0.34, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    for (const piece of pieces) drawPiece(piece);
+  </script>
+</body>
+</html>

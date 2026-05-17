@@ -1,17 +1,24 @@
 // ============================================================================
-// 类型定义（共享逻辑层 - 零平台依赖）
-// ----------------------------------------------------------------------------
+// Shared core type definitions.
+// ============================================================================
 
 export interface Position {
-  x: number; // 0-7, 列索引
-  y: number; // 0-7, 行索引
+  x: number;
+  y: number;
 }
 
 export enum EntityType {
-  KING = 'king',
-  PAWN = 'pawn',
+  GENERAL = 'general',
+  SOLDIER = 'soldier',
   ROOK = 'rook',
   KNIGHT = 'knight',
+  CANNON = 'cannon',
+  ELEPHANT = 'elephant',
+  ADVISOR = 'advisor',
+
+  // Backward-compatible aliases used by older tests/docs.
+  KING = 'general',
+  PAWN = 'soldier',
 }
 
 export enum Team {
@@ -38,7 +45,9 @@ export interface Cell {
 }
 
 export interface Grid {
-  size: number; // 固定为 8
+  width: number;
+  height: number;
+  size: number;
   cells: Map<string, Cell>;
 }
 
@@ -50,7 +59,6 @@ export enum GamePhase {
   GAME_OVER = 'game_over',
 }
 
-// 技能ID
 export type SkillId = 'armor' | 'intimidate' | 'castling' | 'aura' | 'siege';
 
 export const SKILL_IDS: SkillId[] = ['armor', 'intimidate', 'castling', 'aura', 'siege'];
@@ -71,19 +79,13 @@ export interface GameState {
   entities: Map<string, Entity>;
   player: Entity | null;
   enemies: Entity[];
-
-  // 输入锁定（动画/tween 期间为 true）
   animating: boolean;
-
-  // 技能系统
   lastSkillScore: number;
   skills: SkillLevels;
   castlingCooldown: number;
   siegeTimer: number;
   frozenEnemies: Set<string>;
   killStreak: number;
-
-  // 游戏结果
   isVictory?: boolean;
   deathMessage?: string;
 }
