@@ -22,6 +22,10 @@ production/session-state/*.md
 .agents/skills/lark-*/
 skills-lock.json
 
+# === Browser test profiles (Playwright/manual) ===
+tests/browser-profile/
+tests/edge-profile/
+
 # === Internal Planning (not for public) ===
 docs/IMPROVEMENTS-PROPOSAL.md
 docs/MULTI-STAGE-DOCUMENT-WORKFLOW.md
