@@ -5,6 +5,7 @@
 import { COLORS, ENTITY_SYMBOLS } from './colors';
 import { BOARD_WIDTH, BOARD_HEIGHT } from '../core/GameConfig';
 import { GameState, Entity, Position } from '../core/types';
+import { SKILL_DEFS } from '../core/SkillSystem';
 
 export class CanvasRenderer {
   private canvas: HTMLCanvasElement;
@@ -217,14 +218,54 @@ export class CanvasRenderer {
     this.ctx.fillText(`分数: ${state.score}`, leftX, topY + 68);
     this.ctx.fillText(`阶段: ${this.getPhaseText(state.phase)}`, leftX, topY + 94);
 
+    const skillsBaseY = topY + 134;
+    const skillsHeight = this.drawSkillsPanel(state, leftX, skillsBaseY);
+
     if (state.phase === 'game_over') {
+      const gameOverY = skillsBaseY + skillsHeight + 16;
       this.ctx.fillStyle = COLORS.text.accent;
       this.ctx.font = 'bold 20px Arial, sans-serif';
-      this.ctx.fillText('游戏结束', leftX, topY + 134);
+      this.ctx.fillText('游戏结束', leftX, gameOverY);
       this.ctx.font = '14px Arial, sans-serif';
-      this.ctx.fillText(state.deathMessage || '被将死', leftX, topY + 164);
-      this.ctx.fillText('刷新页面重新开始', leftX, topY + 190);
+      this.ctx.fillText(state.deathMessage || '被将死', leftX, gameOverY + 30);
+      this.ctx.fillText('刷新页面重新开始', leftX, gameOverY + 56);
     }
+  }
+
+  // 在右侧面板渲染玩家（帅）当前持有的技能列表。
+  // 数据源：state.skills（SkillLevels，玩家独享，没有按棋子区分）。
+  // 与 Cocos 端 GameController.updateSkillHud 保持等价输出格式。
+  private drawSkillsPanel(state: GameState, x: number, y: number): number {
+    const titleHeight = 22;
+    const lineHeight = 22;
+
+    this.ctx.fillStyle = COLORS.text.primary;
+    this.ctx.font = 'bold 16px Arial, sans-serif';
+    this.ctx.fillText('技能', x, y);
+
+    let cursorY = y + titleHeight;
+    let hasAny = false;
+
+    for (const id of Object.keys(state.skills) as Array<keyof typeof SKILL_DEFS>) {
+      const level = (state.skills as Record<string, number>)[id as string];
+      if (!level || level <= 0) continue;
+      const def = SKILL_DEFS[id];
+      if (!def) continue;
+      hasAny = true;
+      this.ctx.fillStyle = COLORS.text.secondary;
+      this.ctx.font = '14px Arial, sans-serif';
+      this.ctx.fillText(`${def.icon} ${def.name} Lv.${level}`, x, cursorY);
+      cursorY += lineHeight;
+    }
+
+    if (!hasAny) {
+      this.ctx.fillStyle = COLORS.text.secondary;
+      this.ctx.font = '13px Arial, sans-serif';
+      this.ctx.fillText('每得5分获得一个随机技能', x, cursorY);
+      cursorY += lineHeight;
+    }
+
+    return cursorY - y;
   }
 
   private getPhaseText(phase: string): string {

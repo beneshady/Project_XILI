@@ -368,7 +368,7 @@ function applySiegeEffect(state) {
     state.siegeTimer--;
     if (state.siegeTimer <= 0) {
         state.siegeTimer = getSiegeInterval(state.skills.siege);
-        const livingPawns = state.enemies.filter((e)=>!e.isDead && e.type === EntityType.PAWN);
+        const livingPawns = state.enemies.filter((e)=>!e.isDead && e.type === EntityType.SOLDIER);
         if (livingPawns.length > 0) {
             const target = livingPawns[Math.floor(Math.random() * livingPawns.length)];
             target.isDead = true;
@@ -1269,14 +1269,44 @@ class CanvasRenderer {
         this.ctx.fillText(`回合: ${state.turn}`, leftX, topY + 42);
         this.ctx.fillText(`分数: ${state.score}`, leftX, topY + 68);
         this.ctx.fillText(`阶段: ${this.getPhaseText(state.phase)}`, leftX, topY + 94);
+        const skillsBaseY = topY + 134;
+        const skillsHeight = this.drawSkillsPanel(state, leftX, skillsBaseY);
         if (state.phase === 'game_over') {
+            const gameOverY = skillsBaseY + skillsHeight + 16;
             this.ctx.fillStyle = COLORS.text.accent;
             this.ctx.font = 'bold 20px Arial, sans-serif';
-            this.ctx.fillText('游戏结束', leftX, topY + 134);
+            this.ctx.fillText('游戏结束', leftX, gameOverY);
             this.ctx.font = '14px Arial, sans-serif';
-            this.ctx.fillText(state.deathMessage || '被将死', leftX, topY + 164);
-            this.ctx.fillText('刷新页面重新开始', leftX, topY + 190);
+            this.ctx.fillText(state.deathMessage || '被将死', leftX, gameOverY + 30);
+            this.ctx.fillText('刷新页面重新开始', leftX, gameOverY + 56);
         }
+    }
+    drawSkillsPanel(state, x, y) {
+        const titleHeight = 22;
+        const lineHeight = 22;
+        this.ctx.fillStyle = COLORS.text.primary;
+        this.ctx.font = 'bold 16px Arial, sans-serif';
+        this.ctx.fillText('技能', x, y);
+        let cursorY = y + titleHeight;
+        let hasAny = false;
+        for (const id of Object.keys(state.skills)){
+            const level = state.skills[id];
+            if (!level || level <= 0) continue;
+            const def = SKILL_DEFS[id];
+            if (!def) continue;
+            hasAny = true;
+            this.ctx.fillStyle = COLORS.text.secondary;
+            this.ctx.font = '14px Arial, sans-serif';
+            this.ctx.fillText(`${def.icon} ${def.name} Lv.${level}`, x, cursorY);
+            cursorY += lineHeight;
+        }
+        if (!hasAny) {
+            this.ctx.fillStyle = COLORS.text.secondary;
+            this.ctx.font = '13px Arial, sans-serif';
+            this.ctx.fillText('每得5分获得一个随机技能', x, cursorY);
+            cursorY += lineHeight;
+        }
+        return cursorY - y;
     }
     getPhaseText(phase) {
         const phaseMap = {
