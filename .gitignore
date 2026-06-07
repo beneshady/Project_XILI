@@ -17,6 +17,15 @@ CLAUDE.local.md
 production/session-logs/
 production/session-state/*.md
 
+# === Lark / Feishu Skills (per-user installable) ===
+.claude/skills/lark-*/
+.agents/skills/lark-*/
+skills-lock.json
+
+# === Browser test profiles (Playwright/manual) ===
+tests/browser-profile/
+tests/edge-profile/
+
 # === Internal Planning (not for public) ===
 docs/IMPROVEMENTS-PROPOSAL.md
 docs/MULTI-STAGE-DOCUMENT-WORKFLOW.md

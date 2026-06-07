@@ -143,7 +143,7 @@ export function applySiegeEffect(state: GameState): string | null {
     state.siegeTimer = getSiegeInterval(state.skills.siege);
 
     const livingPawns = state.enemies.filter(
-      e => !e.isDead && e.type === EntityType.PAWN
+      e => !e.isDead && e.type === EntityType.SOLDIER
     );
     if (livingPawns.length > 0) {
       const target = livingPawns[Math.floor(Math.random() * livingPawns.length)];

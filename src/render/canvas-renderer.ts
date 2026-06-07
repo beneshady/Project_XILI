@@ -1,460 +1,295 @@
 // ============================================================================
-// Canvas 渲染引擎
-// ----------------------------------------------------------------------------
-// 负责游戏画面的绘制，采用莫兰迪色系和几何风格
+// Canvas renderer.
 // ============================================================================
 
 import { COLORS, ENTITY_SYMBOLS } from './colors';
+import { BOARD_WIDTH, BOARD_HEIGHT } from '../core/GameConfig';
 import { GameState, Entity, Position } from '../core/types';
-
-export interface RendererConfig {
-  canvas: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
-  cellSize: number;
-  padding: number;
-}
+import { SKILL_DEFS } from '../core/SkillSystem';
 
 export class CanvasRenderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private cellSize: number;
   private padding: number;
-  private boardSize: number;
+  private boardWidth: number;
+  private boardHeight: number;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      throw new Error('无法获取 Canvas 2D 上下文');
-    }
+    if (!ctx) throw new Error('Unable to get Canvas 2D context');
     this.ctx = ctx;
 
-    // 计算格子大小
-    this.padding = 20;
-    const availableWidth = canvas.width - this.padding * 2;
-    this.cellSize = Math.floor(availableWidth / 8);
-    this.boardSize = this.cellSize * 8;
+    this.padding = 28;
+    const usableWidth = canvas.width - this.padding * 2 - 180;
+    const usableHeight = canvas.height - this.padding * 2;
+    this.cellSize = Math.floor(Math.min(usableWidth / (BOARD_WIDTH - 1), usableHeight / (BOARD_HEIGHT - 1)));
+    this.boardWidth = this.cellSize * (BOARD_WIDTH - 1);
+    this.boardHeight = this.cellSize * (BOARD_HEIGHT - 1);
   }
-
-  // ============================================================================
-  // 主渲染函数
-  // ============================================================================
 
   render(state: GameState): void {
-    // 清空画布
     this.clear();
-
-    // 绘制棋盘背景
     this.drawBoardBackground();
-
-    // 绘制网格
     this.drawGrid();
-
-    // 绘制高亮（可移动范围、威胁范围）
     this.drawHighlights(state);
-
-    // 绘制实体
     this.drawEntities(state);
-
-    // 绘制 UI
     this.drawUI(state);
   }
-
-  // ============================================================================
-  // 基础绘制函数
-  // ============================================================================
 
   private clear(): void {
     this.ctx.fillStyle = COLORS.background;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
-  // ============================================================================
-  // 棋盘绘制
-  // ============================================================================
+  private origin(): Position {
+    return { x: this.padding, y: this.padding };
+  }
+
+  private point(pos: Position): Position {
+    const start = this.origin();
+    return {
+      x: start.x + pos.x * this.cellSize,
+      y: start.y + pos.y * this.cellSize,
+    };
+  }
 
   private drawBoardBackground(): void {
-    const startX = this.padding;
-    const startY = this.padding;
-
-    // 绘制棋盘底色
+    const start = this.origin();
     this.ctx.fillStyle = COLORS.board.background;
-    this.ctx.fillRect(startX, startY, this.boardSize, this.boardSize);
+    this.ctx.fillRect(
+      start.x - this.cellSize * 0.45,
+      start.y - this.cellSize * 0.45,
+      this.boardWidth + this.cellSize * 0.9,
+      this.boardHeight + this.cellSize * 0.9
+    );
   }
 
   private drawGrid(): void {
-    const startX = this.padding;
-    const startY = this.padding;
+    const start = this.origin();
+    const endX = start.x + this.boardWidth;
+    const endY = start.y + this.boardHeight;
+    const riverTop = start.y + 4 * this.cellSize;
+    const riverBottom = start.y + 5 * this.cellSize;
 
     this.ctx.strokeStyle = COLORS.board.grid;
-    this.ctx.lineWidth = 1;
+    this.ctx.lineWidth = 2;
 
-    // 绘制横向线
-    for (let i = 0; i <= 8; i++) {
-      const y = startY + i * this.cellSize;
+    for (let y = 0; y < BOARD_HEIGHT; y++) {
+      const py = start.y + y * this.cellSize;
       this.ctx.beginPath();
-      this.ctx.moveTo(startX, y);
-      this.ctx.lineTo(startX + this.boardSize, y);
+      this.ctx.moveTo(start.x, py);
+      this.ctx.lineTo(endX, py);
       this.ctx.stroke();
     }
 
-    // 绘制纵向线
-    for (let i = 0; i <= 8; i++) {
-      const x = startX + i * this.cellSize;
+    for (let x = 0; x < BOARD_WIDTH; x++) {
+      const px = start.x + x * this.cellSize;
       this.ctx.beginPath();
-      this.ctx.moveTo(x, startY);
-      this.ctx.lineTo(x, startY + this.boardSize);
+      this.ctx.moveTo(px, start.y);
+      this.ctx.lineTo(px, riverTop);
+      this.ctx.moveTo(px, riverBottom);
+      this.ctx.lineTo(px, endY);
       this.ctx.stroke();
     }
+
+    this.drawPalace(0);
+    this.drawPalace(7);
+    this.drawRiverText();
   }
 
-  // ============================================================================
-  // 高亮绘制
-  // ============================================================================
-
-  private drawHighlights(state: GameState): void {
-    const startX = this.padding;
-    const startY = this.padding;
-
-    // 遍历所有格子
-    for (let y = 0; y < 8; y++) {
-      for (let x = 0; x < 8; x++) {
-        const cell = state.grid.cells.get(`${x},${y}`);
-        if (!cell) continue;
-
-        const px = startX + x * this.cellSize;
-        const py = startY + y * this.cellSize;
-
-        // 绘制可移动范围（空格子）
-        if (cell.isPlayerAccessible && !cell.entity) {
-          this.ctx.fillStyle = COLORS.highlight.accessible;
-          this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
-
-          // 绘制小圆点指示
-          this.ctx.fillStyle = 'rgba(144, 190, 144, 0.8)';
-          this.ctx.beginPath();
-          this.ctx.arc(px + this.cellSize / 2, py + this.cellSize / 2, 4, 0, Math.PI * 2);
-          this.ctx.fill();
-        }
-
-        // 绘制威胁范围
-        if (cell.isThreatened) {
-          this.ctx.fillStyle = COLORS.highlight.threatened;
-          this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
-        }
-      }
-    }
-  }
-
-  // ============================================================================
-  // 实体绘制
-  // ============================================================================
-
-  private drawEntities(state: GameState): void {
-    const startX = this.padding;
-    const startY = this.padding;
-
-    for (const entity of state.entities.values()) {
-      if (entity.isDead) continue;
-
-      const px = startX + entity.position.x * this.cellSize;
-      const py = startY + entity.position.y * this.cellSize;
-      const cx = px + this.cellSize / 2;
-      const cy = py + this.cellSize / 2;
-      const size = this.cellSize * 0.7;
-      const offset = size / 2;
-
-      switch (entity.type) {
-        case 'king':
-          this.drawPlayer(cx, cy, size, entity);
-          break;
-        case 'pawn':
-          this.drawPawn(cx, cy, size, entity);
-          break;
-        case 'rook':
-          this.drawRook(cx, cy, size, entity);
-          break;
-        case 'knight':
-          this.drawKnight(cx, cy, size, entity);
-          break;
-      }
-    }
-  }
-
-  // 绘制玩家（圆角矩形）
-  private drawPlayer(x: number, y: number, size: number, entity: Entity): void {
-    const halfSize = size / 2;
-    const radius = size * 0.2;
-
-    // 阴影
-    this.ctx.fillStyle = COLORS.entity.player.shadow;
-    this.drawRoundedRect(x - halfSize + 3, y - halfSize + 3, size, size, radius);
-
-    // 主体
-    this.ctx.fillStyle = COLORS.entity.player.fill;
-    this.drawRoundedRect(x - halfSize, y - halfSize, size, size, radius);
-
-    // 描边
-    this.ctx.strokeStyle = COLORS.entity.player.stroke;
-    this.ctx.lineWidth = 2;
-    this.drawRoundedRect(x - halfSize, y - halfSize, size, size, radius, true);
-
-    // 符号
-    this.ctx.fillStyle = COLORS.text.playerSymbol;
-    this.ctx.font = `${size * 0.5}px Arial`;
-    this.ctx.textAlign = 'center';
-    this.ctx.textBaseline = 'middle';
-    this.ctx.fillText(ENTITY_SYMBOLS.PLAYER, x, y);
-  }
-
-  // 绘制兵（圆形）
-  private drawPawn(x: number, y: number, size: number, entity: Entity): void {
-    const radius = size / 2;
-
-    // 阴影
-    this.ctx.fillStyle = COLORS.entity.pawn.shadow;
+  private drawPalace(topRow: number): void {
+    const a = this.point({ x: 3, y: topRow });
+    const b = this.point({ x: 5, y: topRow });
+    const c = this.point({ x: 3, y: topRow + 2 });
+    const d = this.point({ x: 5, y: topRow + 2 });
+    this.ctx.strokeStyle = COLORS.board.palace;
+    this.ctx.lineWidth = 1.5;
     this.ctx.beginPath();
-    this.ctx.arc(x + 2, y + 2, radius, 0, Math.PI * 2);
-    this.ctx.fill();
-
-    // 主体
-    this.ctx.fillStyle = COLORS.entity.pawn.fill;
-    this.ctx.beginPath();
-    this.ctx.arc(x, y, radius, 0, Math.PI * 2);
-    this.ctx.fill();
-
-    // 描边
-    this.ctx.strokeStyle = COLORS.entity.pawn.stroke;
-    this.ctx.lineWidth = 2;
-    this.ctx.beginPath();
-    this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+    this.ctx.moveTo(a.x, a.y);
+    this.ctx.lineTo(d.x, d.y);
+    this.ctx.moveTo(b.x, b.y);
+    this.ctx.lineTo(c.x, c.y);
     this.ctx.stroke();
   }
 
-  // 绘制车（圆角矩形 + 文字）
-  private drawRook(x: number, y: number, size: number, entity: Entity): void {
-    const halfSize = size / 2;
-    const radius = size * 0.15;
-
-    // 阴影
-    this.ctx.fillStyle = COLORS.entity.rook.shadow;
-    this.drawRoundedRect(x - halfSize + 3, y - halfSize + 3, size, size, radius);
-
-    // 主体
-    this.ctx.fillStyle = COLORS.entity.rook.fill;
-    this.drawRoundedRect(x - halfSize, y - halfSize, size, size, radius);
-
-    // 描边
-    this.ctx.strokeStyle = COLORS.entity.rook.stroke;
-    this.ctx.lineWidth = 2;
-    this.drawRoundedRect(x - halfSize, y - halfSize, size, size, radius, true);
-
-    // 符号
-    this.ctx.fillStyle = COLORS.text.enemySymbol;
-    this.ctx.font = `bold ${size * 0.45}px Arial`;
+  private drawRiverText(): void {
+    const start = this.origin();
+    const y = start.y + this.cellSize * 4.5;
+    this.ctx.fillStyle = COLORS.board.riverText;
+    this.ctx.font = `bold ${Math.floor(this.cellSize * 0.42)}px "SimSun", "KaiTi", serif`;
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
-    this.ctx.fillText('车', x, y);
+    this.ctx.fillText('楚 河', start.x + this.cellSize * 2, y);
+    this.ctx.fillText('汉 界', start.x + this.cellSize * 6, y);
   }
 
-  // 绘制马（圆角矩形 + 文字）
-  private drawKnight(x: number, y: number, size: number, entity: Entity): void {
-    const halfSize = size / 2;
-    const radius = size * 0.15;
+  private drawHighlights(state: GameState): void {
+    for (let y = 0; y < state.grid.height; y++) {
+      for (let x = 0; x < state.grid.width; x++) {
+        const cell = state.grid.cells.get(`${x},${y}`);
+        if (!cell) continue;
+        const p = this.point({ x, y });
 
-    // 阴影
-    this.ctx.fillStyle = COLORS.entity.knight.shadow;
-    this.drawRoundedRect(x - halfSize + 3, y - halfSize + 3, size, size, radius);
+        if (cell.isThreatened) {
+          this.ctx.fillStyle = COLORS.highlight.threatened;
+          this.ctx.beginPath();
+          this.ctx.arc(p.x, p.y, this.cellSize * 0.36, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
 
-    // 主体
-    this.ctx.fillStyle = COLORS.entity.knight.fill;
-    this.drawRoundedRect(x - halfSize, y - halfSize, size, size, radius);
-
-    // 描边
-    this.ctx.strokeStyle = COLORS.entity.knight.stroke;
-    this.ctx.lineWidth = 2;
-    this.drawRoundedRect(x - halfSize, y - halfSize, size, size, radius, true);
-
-    // 符号
-    this.ctx.fillStyle = COLORS.text.enemySymbol;
-    this.ctx.font = `bold ${size * 0.45}px Arial`;
-    this.ctx.textAlign = 'center';
-    this.ctx.textBaseline = 'middle';
-    this.ctx.fillText('马', x, y);
-  }
-
-  // ============================================================================
-  // 辅助绘制函数
-  // ============================================================================
-
-  private drawRoundedRect(
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    radius: number,
-    stroke: boolean = false
-  ): void {
-    this.ctx.beginPath();
-    this.ctx.moveTo(x + radius, y);
-    this.ctx.lineTo(x + width - radius, y);
-    this.ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-    this.ctx.lineTo(x + width, y + height - radius);
-    this.ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-    this.ctx.lineTo(x + radius, y + height);
-    this.ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-    this.ctx.lineTo(x, y + radius);
-    this.ctx.quadraticCurveTo(x, y, x + radius, y);
-    this.ctx.closePath();
-
-    if (stroke) {
-      this.ctx.stroke();
-    } else {
-      this.ctx.fill();
+        if (cell.isPlayerAccessible && !cell.entity) {
+          this.ctx.fillStyle = COLORS.highlight.accessible;
+          this.ctx.beginPath();
+          this.ctx.arc(p.x, p.y, this.cellSize * 0.32, 0, Math.PI * 2);
+          this.ctx.fill();
+          this.ctx.fillStyle = COLORS.highlight.accessibleDot;
+          this.ctx.beginPath();
+          this.ctx.arc(p.x, p.y, Math.max(3, this.cellSize * 0.08), 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+      }
     }
   }
 
-  // ============================================================================
-  // UI 绘制
-  // ============================================================================
+  private drawEntities(state: GameState): void {
+    for (const entity of state.entities.values()) {
+      if (entity.isDead) continue;
+      const p = this.point(entity.position);
+      this.drawPiece(p.x, p.y, this.cellSize * 0.72, entity);
+    }
+  }
+
+  private drawPiece(x: number, y: number, size: number, entity: Entity): void {
+    const style = this.getEntityStyle(entity);
+    const radius = size / 2;
+
+    this.ctx.fillStyle = style.shadow;
+    this.ctx.beginPath();
+    this.ctx.arc(x + 3, y + 4, radius, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    this.ctx.fillStyle = style.fill;
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    this.ctx.strokeStyle = style.stroke;
+    this.ctx.lineWidth = 3;
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+    this.ctx.stroke();
+    this.ctx.lineWidth = 1.5;
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, radius * 0.78, 0, Math.PI * 2);
+    this.ctx.stroke();
+
+    this.ctx.fillStyle = style.text || COLORS.text.enemySymbol;
+    this.ctx.font = `bold ${Math.floor(size * 0.46)}px "KaiTi", "SimSun", serif`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText(this.getEntitySymbol(entity), x, y + 1);
+  }
+
+  private getEntityStyle(entity: Entity): { fill: string; stroke: string; shadow: string; text?: string } {
+    if (entity.team === 'player') return COLORS.entity.player;
+    return (COLORS.entity as any)[entity.type] || COLORS.entity.soldier;
+  }
+
+  private getEntitySymbol(entity: Entity): string {
+    if (entity.team === 'player') return ENTITY_SYMBOLS.PLAYER;
+    const key = entity.type.toUpperCase() as keyof typeof ENTITY_SYMBOLS;
+    return ENTITY_SYMBOLS[key] || '?';
+  }
 
   private drawUI(state: GameState): void {
-    const topY = 20;
-    const leftX = this.padding + this.boardSize + 20;
-
-    // 标题
+    const leftX = this.padding + this.boardWidth + 56;
+    const topY = this.padding;
     this.ctx.fillStyle = COLORS.text.primary;
-    this.ctx.font = 'bold 24px Arial';
+    this.ctx.font = 'bold 24px Arial, sans-serif';
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'top';
     this.ctx.fillText('肉鸽象棋', leftX, topY);
 
-    // 回合数
     this.ctx.fillStyle = COLORS.text.secondary;
-    this.ctx.font = '16px Arial';
-    this.ctx.fillText(`回合: ${state.turn}`, leftX, topY + 40);
+    this.ctx.font = '16px Arial, sans-serif';
+    this.ctx.fillText(`回合: ${state.turn}`, leftX, topY + 42);
+    this.ctx.fillText(`分数: ${state.score}`, leftX, topY + 68);
+    this.ctx.fillText(`阶段: ${this.getPhaseText(state.phase)}`, leftX, topY + 94);
 
-    // 分数
-    this.ctx.fillText(`分数: ${state.score}`, leftX, topY + 65);
+    const skillsBaseY = topY + 134;
+    const skillsHeight = this.drawSkillsPanel(state, leftX, skillsBaseY);
 
-    // 阶段
-    const phaseText = this.getPhaseText(state.phase);
-    this.ctx.fillText(`阶段: ${phaseText}`, leftX, topY + 90);
-
-    // 游戏结束信息
     if (state.phase === 'game_over') {
+      const gameOverY = skillsBaseY + skillsHeight + 16;
       this.ctx.fillStyle = COLORS.text.accent;
-      this.ctx.font = 'bold 20px Arial';
-      this.ctx.fillText('游戏结束!', leftX, topY + 130);
+      this.ctx.font = 'bold 20px Arial, sans-serif';
+      this.ctx.fillText('游戏结束', leftX, gameOverY);
+      this.ctx.font = '14px Arial, sans-serif';
+      this.ctx.fillText(state.deathMessage || '被将死', leftX, gameOverY + 30);
+      this.ctx.fillText('刷新页面重新开始', leftX, gameOverY + 56);
+    }
+  }
 
+  // 在右侧面板渲染玩家（帅）当前持有的技能列表。
+  // 数据源：state.skills（SkillLevels，玩家独享，没有按棋子区分）。
+  // 与 Cocos 端 GameController.updateSkillHud 保持等价输出格式。
+  private drawSkillsPanel(state: GameState, x: number, y: number): number {
+    const titleHeight = 22;
+    const lineHeight = 22;
+
+    this.ctx.fillStyle = COLORS.text.primary;
+    this.ctx.font = 'bold 16px Arial, sans-serif';
+    this.ctx.fillText('技能', x, y);
+
+    let cursorY = y + titleHeight;
+    let hasAny = false;
+
+    for (const id of Object.keys(state.skills) as Array<keyof typeof SKILL_DEFS>) {
+      const level = (state.skills as Record<string, number>)[id as string];
+      if (!level || level <= 0) continue;
+      const def = SKILL_DEFS[id];
+      if (!def) continue;
+      hasAny = true;
       this.ctx.fillStyle = COLORS.text.secondary;
-      this.ctx.font = '14px Arial';
-      if (state.deathMessage) {
-        // 简单换行处理
-        const words = state.deathMessage.split('');
-        let line = '';
-        let y = topY + 160;
-        for (let i = 0; i < words.length; i++) {
-          line += words[i];
-          if ((i + 1) % 10 === 0) {
-            this.ctx.fillText(line, leftX, y);
-            line = '';
-            y += 20;
-          }
-        }
-        if (line) {
-          this.ctx.fillText(line, leftX, y);
-        }
-      }
-
-      this.ctx.fillStyle = COLORS.button.text;
-      this.ctx.fillText('刷新页面重新开始', leftX, topY + 200);
+      this.ctx.font = '14px Arial, sans-serif';
+      this.ctx.fillText(`${def.icon} ${def.name} Lv.${level}`, x, cursorY);
+      cursorY += lineHeight;
     }
 
-    // 图例
-    this.drawLegend(leftX, topY + 250);
+    if (!hasAny) {
+      this.ctx.fillStyle = COLORS.text.secondary;
+      this.ctx.font = '13px Arial, sans-serif';
+      this.ctx.fillText('每得5分获得一个随机技能', x, cursorY);
+      cursorY += lineHeight;
+    }
+
+    return cursorY - y;
   }
 
   private getPhaseText(phase: string): string {
     const phaseMap: { [key: string]: string } = {
-      'player_turn': '玩家回合',
-      'enemy_turn': '敌人回合',
-      'animating': '动画中',
-      'spawning': '生成中',
-      'game_over': '游戏结束',
+      player_turn: '你的回合',
+      enemy_turn: '敌人行动',
+      animating: '动画中',
+      spawning: '生成中',
+      game_over: '游戏结束',
     };
     return phaseMap[phase] || phase;
   }
 
-  private drawLegend(x: number, y: number): void {
-    this.ctx.fillStyle = COLORS.text.secondary;
-    this.ctx.font = '14px Arial';
-    this.ctx.fillText('图例:', x, y);
-
-    const legendY = y + 25;
-    const spacing = 25;
-
-    // 玩家
-    this.ctx.fillStyle = COLORS.entity.player.fill;
-    this.ctx.beginPath();
-    this.ctx.arc(x + 10, legendY, 8, 0, Math.PI * 2);
-    this.ctx.fill();
-    this.ctx.fillStyle = COLORS.text.secondary;
-    this.ctx.fillText('玩家', x + 25, legendY - 5);
-
-    // 兵
-    this.ctx.fillStyle = COLORS.entity.pawn.fill;
-    this.ctx.beginPath();
-    this.ctx.arc(x + 10, legendY + spacing, 8, 0, Math.PI * 2);
-    this.ctx.fill();
-    this.ctx.fillStyle = COLORS.text.secondary;
-    this.ctx.fillText('兵', x + 25, legendY + spacing - 5);
-
-    // 车
-    this.ctx.fillStyle = COLORS.entity.rook.fill;
-    this.ctx.fillRect(x + 2, legendY + spacing * 2 - 8, 16, 16);
-    this.ctx.fillStyle = COLORS.text.secondary;
-    this.ctx.fillText('车', x + 25, legendY + spacing * 2 - 5);
-
-    // 马
-    this.ctx.fillStyle = COLORS.entity.knight.fill;
-    this.ctx.fillRect(x + 2, legendY + spacing * 3 - 8, 16, 16);
-    this.ctx.fillStyle = COLORS.text.secondary;
-    this.ctx.fillText('马', x + 25, legendY + spacing * 3 - 5);
-
-    // 可移动
-    this.ctx.fillStyle = COLORS.highlight.accessible;
-    this.ctx.fillRect(x + 2, legendY + spacing * 4 - 8, 16, 16);
-    this.ctx.fillStyle = COLORS.text.secondary;
-    this.ctx.fillText('可移动', x + 25, legendY + spacing * 4 - 5);
-
-    // 威胁
-    this.ctx.fillStyle = COLORS.highlight.threatened;
-    this.ctx.fillRect(x + 2, legendY + spacing * 5 - 8, 16, 16);
-    this.ctx.fillStyle = COLORS.text.secondary;
-    this.ctx.fillText('威胁', x + 25, legendY + spacing * 5 - 5);
-  }
-
-  // ============================================================================
-  // 坐标转换
-  // ============================================================================
-
-  // 将屏幕坐标转换为棋盘坐标
   screenToBoard(screenX: number, screenY: number): Position | null {
-    const startX = this.padding;
-    const startY = this.padding;
-
-    const boardX = screenX - startX;
-    const boardY = screenY - startY;
-
-    if (boardX < 0 || boardX >= this.boardSize ||
-        boardY < 0 || boardY >= this.boardSize) {
+    const start = this.origin();
+    const relX = screenX - start.x;
+    const relY = screenY - start.y;
+    const x = Math.round(relX / this.cellSize);
+    const y = Math.round(relY / this.cellSize);
+    const p = this.point({ x, y });
+    const dist = Math.hypot(screenX - p.x, screenY - p.y);
+    if (x < 0 || x >= BOARD_WIDTH || y < 0 || y >= BOARD_HEIGHT || dist > this.cellSize * 0.48) {
       return null;
     }
-
-    return {
-      x: Math.floor(boardX / this.cellSize),
-      y: Math.floor(boardY / this.cellSize),
-    };
+    return { x, y };
   }
 }

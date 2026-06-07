@@ -1,32 +1,63 @@
 #!/usr/bin/env node
-// 将 shared/ 逻辑层同步到各项目目录
-// 用法: node sync-shared.js
+// Sync the canonical core logic from src/core/ into generated copies.
+// Usage: node sync-shared.js
+//
+// Direction:
+//   src/core/ -> shared/
+//   src/core/ -> assets/scripts/core/
+//
+// Do not edit shared/ or assets/scripts/core/ by hand unless you are fixing
+// this sync pipeline itself. Gameplay changes should start in src/core/.
 
 const fs = require('fs');
 const path = require('path');
 
-const SHARED_DIR = path.join(__dirname, 'shared');
+const SOURCE_DIR = path.join(__dirname, 'src', 'core');
 const TARGETS = [
-  // HTML5 项目
-  { dir: path.join(__dirname, 'src', 'core'), description: 'src/core/' },
-  // Cocos 项目（同目录下的 assets/scripts/core/）
+  { dir: path.join(__dirname, 'shared'), description: 'shared/' },
   { dir: path.join(__dirname, 'assets', 'scripts', 'core'), description: 'assets/scripts/core/' },
 ];
 
-const SHARED_FILES = fs.readdirSync(SHARED_DIR).filter(f => f.endsWith('.ts'));
+const CORE_FILES = [
+  { source: ['GameConfig.ts'], target: 'GameConfig.ts' },
+  { source: ['GameLogic.ts'], target: 'GameLogic.ts' },
+  { source: ['SkillSystem.ts'], target: 'SkillSystem.ts' },
+  { source: ['Types.ts', 'types.ts'], target: 'Types.ts' },
+  { source: ['Utils.ts', 'utils.ts'], target: 'Utils.ts' },
+];
 
-for (const target of TARGETS) {
-  if (!fs.existsSync(target.dir)) {
-    console.log(`SKIP ${target.description} (directory not found)`);
-    continue;
+function resolveSource(candidates) {
+  for (const name of candidates) {
+    const filePath = path.join(SOURCE_DIR, name);
+    if (fs.existsSync(filePath)) return filePath;
   }
 
-  for (const file of SHARED_FILES) {
-    const src = path.join(SHARED_DIR, file);
-    const dest = path.join(target.dir, file);
+  const available = fs.readdirSync(SOURCE_DIR);
+  const lowerMap = new Map(available.map((name) => [name.toLowerCase(), name]));
+  for (const name of candidates) {
+    const actual = lowerMap.get(name.toLowerCase());
+    if (actual) return path.join(SOURCE_DIR, actual);
+  }
+
+  throw new Error(`Missing source file in src/core: ${candidates.join(' or ')}`);
+}
+
+if (!fs.existsSync(SOURCE_DIR)) {
+  throw new Error(`Source directory not found: ${SOURCE_DIR}`);
+}
+
+let copied = 0;
+
+for (const target of TARGETS) {
+  fs.mkdirSync(target.dir, { recursive: true });
+
+  for (const file of CORE_FILES) {
+    const src = resolveSource(file.source);
+    const dest = path.join(target.dir, file.target);
     fs.copyFileSync(src, dest);
-    console.log(`COPY ${file} → ${target.description}`);
+    copied++;
+    console.log(`COPY ${path.basename(src)} -> ${target.description}${file.target}`);
   }
 }
 
-console.log(`\nSynced ${SHARED_FILES.length} files from shared/`);
+console.log(`\nSynced ${CORE_FILES.length} core files from src/core/ to ${TARGETS.length} targets (${copied} copies).`);
