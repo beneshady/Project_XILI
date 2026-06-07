@@ -4,25 +4,30 @@ description: "Generates a contextual onboarding document for a new contributor o
 argument-hint: "[role|area]"
 user-invocable: true
 allowed-tools: Read, Glob, Grep, Write
+model: haiku
 ---
 
-When this skill is invoked:
+## Phase 1: Load Project Context
 
-1. **Read the AGENTS.md** for project overview and standards.
+Read CLAUDE.md for project overview and standards.
 
-2. **Read the relevant agent definition** from `.Codex/agents/` if a specific
-   role is specified.
+Read the relevant agent definition from `.claude/agents/` if a specific role is specified.
 
-3. **Scan the codebase** for the relevant area:
-   - For programmers: scan `src/` for architecture, patterns, key files
-   - For designers: scan `design/` for existing design documents
-   - For narrative: scan `design/narrative/` for world-building and story docs
-   - For QA: scan `tests/` for existing test coverage
-   - For production: scan `production/` for current sprint and milestone
+---
 
-4. **Read recent changes** (git log if available) to understand current momentum.
+## Phase 2: Scan Relevant Area
 
-5. **Generate the onboarding document**:
+- For programmers: scan `src/` for architecture, patterns, key files
+- For designers: scan `design/` for existing design documents
+- For narrative: scan `design/narrative/` for world-building and story docs
+- For QA: scan `tests/` for existing test coverage
+- For production: scan `production/` for current sprint and milestone
+
+Read recent changes (git log if available) to understand current momentum.
+
+---
+
+## Phase 3: Generate Onboarding Document
 
 ```markdown
 # Onboarding: [Role/Area]
@@ -45,7 +50,7 @@ When this skill is invoked:
 |------|---------|--------------|
 
 ## Current Standards and Conventions
-[Summary of conventions relevant to this role from AGENTS.md and agent definition]
+[Summary of conventions relevant to this role from CLAUDE.md and agent definition]
 
 ## Current State of Your Area
 [What has been built, what is in progress, what is planned next]
@@ -69,3 +74,23 @@ When this skill is invoked:
 ## Questions to Ask
 [Questions the new contributor should ask to get fully oriented]
 ```
+
+---
+
+## Phase 4: Save Document
+
+Present the onboarding document to the user.
+
+Ask: "May I write this to `production/onboarding/onboard-[role]-[date].md`?"
+
+If yes, write the file, creating the directory if needed.
+
+---
+
+## Phase 5: Next Steps
+
+Verdict: **COMPLETE** — onboarding document generated.
+
+- Share the onboarding doc with the new contributor before their first session.
+- Run `/sprint-status` to show the new contributor current progress.
+- Run `/help` if the contributor needs guidance on what to work on next.
