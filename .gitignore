@@ -39,6 +39,7 @@ temp/
 library/
 local/
 native/
+profiles/
 
 # === Engine: Godot ===
 .godot/
