@@ -154,3 +154,9 @@ $RECYCLE.BIN/
 *.msm
 *.msp
 *.lnk
+
+# === E2E / Playwright ===
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
