@@ -63,6 +63,39 @@ export type SkillId = 'armor' | 'intimidate' | 'castling' | 'aura' | 'siege';
 
 export const SKILL_IDS: SkillId[] = ['armor', 'intimidate', 'castling', 'aura', 'siege'];
 
+// ----------------------------------------------------------------------------
+// 数据驱动技能定义（SkillSpec）
+// ----------------------------------------------------------------------------
+
+export enum SkillType {
+  DAMAGE   = 'damage',
+  MOVEMENT = 'movement',
+  DEFENSE  = 'defense',
+  UTILITY  = 'utility',
+}
+
+export enum Faction {
+  GENERAL  = 'general',   // 帅
+  ROOK     = 'rook',      // 车
+  KNIGHT   = 'knight',    // 马
+  CANNON   = 'cannon',    // 炮
+  ELEPHANT = 'elephant',  // 相
+  SOLDIER  = 'soldier',   // 兵
+}
+
+export interface SkillSpec {
+  id:       string;
+  name:     string;
+  desc:     string;
+  flavor:   string;
+  types:    SkillType[];
+  faction:  Faction;
+  icon:     string;
+  maxLevel: number;
+  /** key=数值名, value=每级的值（索引 0 = 1 级） */
+  scaling:  Record<string, number[]>;
+}
+
 export interface SkillLevels {
   armor: number;
   intimidate: number;
