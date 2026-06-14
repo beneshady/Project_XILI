@@ -119,6 +119,8 @@ export interface GameState {
   siegeTimer: number;
   frozenEnemies: Set<string>;
   killStreak: number;
+  startedAt: number;          // 对局开始时刻（Date.now()，毫秒），用于计算生存时间
+  finishedAt?: number;        // 对局结束时刻（GAME_OVER 触发时写入）
   isVictory?: boolean;
   deathMessage?: string;
 }

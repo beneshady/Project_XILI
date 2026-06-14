@@ -112,6 +112,7 @@ export function createInitialState(): GameState {
     siegeTimer: 0,
     frozenEnemies: new Set(),
     killStreak: 0,
+    startedAt: Date.now(),
   };
 
   updatePlayerAccessiblePositions(state);
@@ -561,6 +562,7 @@ export function executeEnemyTurn(state: GameState): EnemyTurnResult {
     state.player.isDead = true;
     state.phase = GamePhase.GAME_OVER;
     state.isVictory = false;
+    state.finishedAt = Date.now();
     state.deathMessage = `被 ${killer?.type || '敌人'} 击杀`;
     result.playerDead = true;
     return result;
