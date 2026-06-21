@@ -4,6 +4,8 @@ import { posKey } from './core/Utils';
 import { createInitialState, handlePlayerMove, executeEnemyTurn, isGameOver } from './core/GameLogic';
 import { COLORS, ENTITY_SYMBOLS, BOARD_WIDTH, BOARD_HEIGHT } from './core/GameConfig';
 import { SKILL_DEFS, getAuraRange } from './core/SkillSystem';
+import { canPurchaseOffer, closeShop, purchaseShopOffer } from './core/ShopSystem';
+import { SKILL_SPECS } from './core/SkillSpecs';
 
 const { ccclass } = _decorator;
 
@@ -36,12 +38,14 @@ export class GameController extends Component {
     private pieceLabelsNode: Node = null!;
     private uiNode: Node = null!;
     private scoreLabel: Label = null!;
+    private coinLabel: Label = null!;
     private turnLabel: Label = null!;
     private phaseLabel: Label = null!;
     private gameOverNode: Node = null!;
     private gameOverLabel: Label = null!;
     private skillHudNode: Node = null!;
     private skillLabels: Label[] = [];
+    private shopNode: Node = null!;
     private state: GameState = null!;
     private cellSize = 0;
     private boardOriginX = 0;
@@ -82,6 +86,11 @@ export class GameController extends Component {
         this.scoreLabel.color = hexColor(COLORS.text.accent);
         this.scoreLabel.node.setPosition(0, 60, 0);
 
+        this.coinLabel = this.createLabel('CoinLabel', this.uiNode);
+        this.coinLabel.fontSize = 20;
+        this.coinLabel.color = hexColor(COLORS.text.accent);
+        this.coinLabel.node.setPosition(150, 60, 0);
+
         this.turnLabel = this.createLabel('TurnLabel', this.uiNode);
         this.turnLabel.fontSize = 18;
         this.turnLabel.color = hexColor(COLORS.text.secondary);
@@ -109,6 +118,10 @@ export class GameController extends Component {
         this.gameOverLabel.fontSize = 36;
         this.gameOverLabel.color = hexColor(COLORS.text.accent);
         this.gameOverLabel.node.setPosition(0, 40, 0);
+
+        this.shopNode = this.createNode('Shop', this.node);
+        this.shopNode.addComponent(UITransform).setContentSize(new Size(canvasWidth, canvasWidth + 300));
+        this.shopNode.active = false;
 
         this.boardNode.on(Node.EventType.TOUCH_END, this.onBoardTouch, this);
         this.node.on(Node.EventType.TOUCH_END, this.onGlobalTouch, this);
@@ -164,6 +177,10 @@ export class GameController extends Component {
         this.drawHighlights();
         this.drawEntities();
         this.updateUI();
+        if (this.shopNode) {
+            if (this.state.phase === GamePhase.SHOP) this.showShop();
+            else this.shopNode.active = false;
+        }
     }
 
     private drawBoard() {
@@ -286,10 +303,12 @@ export class GameController extends Component {
 
     private updateUI() {
         this.scoreLabel.string = `分数: ${this.state.score}${this.state.killStreak >= 2 ? ` (x${this.state.killStreak})` : ''}`;
+        this.coinLabel.string = `金币: ${this.state.coins}`;
         this.turnLabel.string = `回合: ${this.state.turn}`;
         const phaseNames: Record<string, string> = {
             [GamePhase.PLAYER_TURN]: '你的回合',
             [GamePhase.ENEMY_TURN]: '敌人行动中...',
+            [GamePhase.SHOP]: '技能商店',
             [GamePhase.GAME_OVER]: '游戏结束',
         };
         this.phaseLabel.string = phaseNames[this.state.phase] || this.state.phase;
@@ -322,7 +341,7 @@ export class GameController extends Component {
             const hint = this.createLabel('SkillHint', this.skillHudNode);
             hint.fontSize = 13;
             hint.color = hexColor(COLORS.text.secondary);
-            hint.string = '每得5分获得一个随机技能';
+            hint.string = '达到积分阈值可在商店购买技能';
             this.skillLabels.push(hint);
         }
     }
@@ -330,6 +349,56 @@ export class GameController extends Component {
     private showGameOver() {
         this.gameOverNode.active = true;
         this.gameOverLabel.string = `游戏结束\n得分: ${this.state.score}  回合: ${this.state.turn}`;
+    }
+
+    private showShop() {
+        this.shopNode.active = true;
+        this.shopNode.removeAllChildren();
+        const dimmer = this.createNode('ShopDimmer', this.shopNode);
+        dimmer.addComponent(UITransform).setContentSize(new Size(this.DESIGN_WIDTH, this.DESIGN_WIDTH + 300));
+        const gfx = dimmer.addComponent(Graphics);
+        gfx.fillColor = new Color(0, 0, 0, 190);
+        gfx.rect(-this.DESIGN_WIDTH / 2, -(this.DESIGN_WIDTH + 300) / 2, this.DESIGN_WIDTH, this.DESIGN_WIDTH + 300);
+        gfx.fill();
+
+        const title = this.createLabel('ShopTitle', this.shopNode);
+        title.string = `技能商店  金币: ${this.state.coins}`;
+        title.fontSize = 30;
+        title.color = hexColor(COLORS.text.accent);
+        title.node.setPosition(0, 190, 0);
+
+        this.state.shopOffers.forEach((offer, index) => {
+            const spec = SKILL_SPECS[offer.skillId];
+            const status = canPurchaseOffer(this.state, offer);
+            const label = this.createLabel(`ShopOffer_${offer.id}`, this.shopNode);
+            label.fontSize = 18;
+            label.color = status === 'purchased' ? hexColor(COLORS.text.secondary) : hexColor(COLORS.text.primary);
+            const action = offer.purchased ? '售罄'
+                : status === 'max_level' ? '已满级'
+                : status === 'insufficient_coins' ? '金币不足'
+                : `${offer.price} 金币购买`;
+            label.string = `${spec.icon} ${spec.name} Lv.${this.state.skills[offer.skillId]}\n${spec.desc}\n${action}`;
+            label.node.getComponent(UITransform)!.setContentSize(new Size(210, 150));
+            label.node.setPosition((index - 1) * 225, 30, 0);
+            label.node.on(Node.EventType.TOUCH_END, () => {
+                purchaseShopOffer(this.state, offer.id);
+                this.render();
+            }, this);
+        });
+
+        const continueLabel = this.createLabel('ShopContinue', this.shopNode);
+        continueLabel.string = '继续战斗';
+        continueLabel.fontSize = 24;
+        continueLabel.color = Color.WHITE;
+        continueLabel.node.getComponent(UITransform)!.setContentSize(new Size(220, 70));
+        continueLabel.node.setPosition(0, -180, 0);
+        continueLabel.node.on(Node.EventType.TOUCH_END, () => this.closeShopAndResume(), this);
+    }
+
+    private closeShopAndResume() {
+        closeShop(this.state);
+        this.shopNode.active = false;
+        this.render();
     }
 
     private createNode(name: string, parent: Node): Node {

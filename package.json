@@ -4,9 +4,15 @@
   "scripts": {
     "sync:core": "node sync-shared.js",
     "build:web": "node tools/build-web-demo.js",
-    "test": "node tests/test-shared-logic.js"
+    "test:logic": "node tests/test-shared-logic.js && node tests/test-leaderboard.js && node tests/test-shop-system.js",
+    "test:e2e": "playwright test",
+    "test": "npm run test:logic"
   },
   "creator": {
     "version": "3.8.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "http-server": "^14.1.1"
   }
 }

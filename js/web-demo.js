@@ -25,6 +25,7 @@ var GamePhase = /*#__PURE__*/ function(GamePhase) {
     GamePhase["ENEMY_TURN"] = "enemy_turn";
     GamePhase["ANIMATING"] = "animating";
     GamePhase["SPAWNING"] = "spawning";
+    GamePhase["SHOP"] = "shop";
     GamePhase["GAME_OVER"] = "game_over";
     return GamePhase;
 }({});
@@ -35,6 +36,22 @@ const SKILL_IDS = [
     'aura',
     'siege'
 ];
+var SkillType = /*#__PURE__*/ function(SkillType) {
+    SkillType["DAMAGE"] = "damage";
+    SkillType["MOVEMENT"] = "movement";
+    SkillType["DEFENSE"] = "defense";
+    SkillType["UTILITY"] = "utility";
+    return SkillType;
+}({});
+var Faction = /*#__PURE__*/ function(Faction) {
+    Faction["GENERAL"] = "general";
+    Faction["ROOK"] = "rook";
+    Faction["KNIGHT"] = "knight";
+    Faction["CANNON"] = "cannon";
+    Faction["ELEPHANT"] = "elephant";
+    Faction["SOLDIER"] = "soldier";
+    return Faction;
+}({});
 
 // ---- src/core/GameConfig.ts ----
 const BOARD_WIDTH = 9;
@@ -197,7 +214,8 @@ const SCORE_CONFIG = {
     maxKillStreak: 3,
     deadCleanupInterval: 10
 };
-const SKILL_SCORE_THRESHOLD = 5;
+const SHOP_PRICE = 5;
+const SHOP_OFFER_COUNT = 3;
 
 // ---- src/core/utils.ts ----
 function posEq(a, b) {
@@ -272,6 +290,122 @@ function getAllPositions(width, height = width) {
     return positions;
 }
 
+// ---- src/core/SkillSpecs.ts ----
+const SKILL_SPECS = {
+    armor: {
+        id: 'armor',
+        name: '铁甲护身',
+        desc: '抵挡一次致命攻击',
+        flavor: '为自身披上一层护甲。当受到会造成死亡的攻击时，护甲自动消耗一层将其抵挡，免于一死。',
+        types: [
+            SkillType.DEFENSE
+        ],
+        faction: Faction.GENERAL,
+        icon: '\u{1F6E1}',
+        maxLevel: 5,
+        scaling: {
+            armorLayers: [
+                1,
+                1,
+                2,
+                2,
+                3
+            ]
+        }
+    },
+    intimidate: {
+        id: 'intimidate',
+        name: '借刀杀人',
+        desc: '相邻敌人有概率被冻结',
+        flavor: '玩家的气势令相邻的敌人心生胆怯。每轮敌人行动前，紧靠你的敌人有一定概率被吓住，该回合无法移动。',
+        types: [
+            SkillType.UTILITY
+        ],
+        faction: Faction.GENERAL,
+        icon: '\u{1F628}',
+        maxLevel: 5,
+        scaling: {
+            freezeChance: [
+                0.30,
+                0.45,
+                0.60,
+                0.75,
+                0.75
+            ]
+        }
+    },
+    castling: {
+        id: 'castling',
+        name: '王车易位',
+        desc: '可传送到任意空格',
+        flavor: '传承自象棋的特殊走法。冷却就绪时，本回合可以无视距离限制，直接传送到棋盘上任意一个空格。传送后进入冷却。',
+        types: [
+            SkillType.MOVEMENT
+        ],
+        faction: Faction.GENERAL,
+        icon: '⚡',
+        maxLevel: 5,
+        scaling: {
+            cooldown: [
+                4,
+                3,
+                2,
+                2,
+                2
+            ]
+        }
+    },
+    aura: {
+        id: 'aura',
+        name: '将军威势',
+        desc: '敌人回避你的周围',
+        flavor: '散发出令敌人不敢靠近的王者气场。敌人计算移动路线时，会主动避开你周围的格子。',
+        types: [
+            SkillType.UTILITY
+        ],
+        faction: Faction.GENERAL,
+        icon: '\u{1F451}',
+        maxLevel: 3,
+        scaling: {
+            auraRange: [
+                1,
+                1,
+                2
+            ]
+        }
+    },
+    siege: {
+        id: 'siege',
+        name: '兵临城下',
+        desc: '定期自动消灭一个小兵',
+        flavor: '来自四面八方的力量汇聚，定期自动击杀场上一名随机小兵。无小兵时该次效果跳过。',
+        types: [
+            SkillType.DAMAGE
+        ],
+        faction: Faction.GENERAL,
+        icon: '⚔',
+        maxLevel: 5,
+        scaling: {
+            interval: [
+                3,
+                2,
+                1,
+                1,
+                1
+            ]
+        }
+    }
+};
+function getScalingValue(spec, valueName, level) {
+    const values = spec.scaling[valueName];
+    if (!values || values.length === 0) return 0;
+    const idx = Math.max(0, Math.min(level - 1, values.length - 1));
+    return values[idx];
+}
+function getSkillsByFaction(faction) {
+    return Object.values(SKILL_SPECS).filter((s)=>s.faction === faction);
+}
+
 // ---- src/core/SkillSystem.ts ----
 const SKILL_DEFS = {
     armor: {
@@ -286,73 +420,58 @@ const SKILL_DEFS = {
         icon: '\u{1F628}',
         desc: '相邻敌人有概率被冻结',
         fullDesc: '玩家的气势令相邻的敌人心生胆怯。每轮敌人行动前，紧靠你的敌人有一定概率被吓住，该回合无法移动。',
-        descStack: (lv)=>`当前冻结概率：${Math.min(30 + (lv - 1) * 15, 75)}%（最高75%）`
+        descStack: (lv)=>`当前冻结概率：${Math.round(getScalingValue(SKILL_SPECS.intimidate, 'freezeChance', lv) * 100)}%（最高75%）`
     },
     castling: {
         name: '王车易位',
-        icon: '\u26A1',
+        icon: '⚡',
         desc: '可传送到任意空格',
         fullDesc: '传承自象棋的特殊走法。冷却就绪时，本回合可以无视距离限制，直接传送到棋盘上任意一个空格。传送后进入冷却。',
-        descStack: (lv)=>`冷却：${Math.max(4 - lv + 1, 2)} 回合（叠加可缩短）`
+        descStack: (lv)=>`冷却：${getScalingValue(SKILL_SPECS.castling, 'cooldown', lv)} 回合（叠加可缩短）`
     },
     aura: {
         name: '将军威势',
         icon: '\u{1F451}',
         desc: '敌人回避你的周围',
         fullDesc: '散发出令敌人不敢靠近的王者气场。敌人计算移动路线时，会主动避开你周围的格子，不会主动走入威慑范围内。',
-        descStack: (lv)=>`威慑范围：${Math.min(lv, 2)} 格（最大2格）`
+        descStack: (lv)=>`威慑范围：${getScalingValue(SKILL_SPECS.aura, 'auraRange', lv)} 格（最大2格）`
     },
     siege: {
         name: '兵临城下',
-        icon: '\u2694',
+        icon: '⚔',
         desc: '定期自动消灭一个小兵',
         fullDesc: '来自四面八方的力量汇聚，定期自动击杀场上一名随机小兵。无小兵时该次效果跳过。',
-        descStack: (lv)=>`触发间隔：每 ${Math.max(3 - lv + 1, 1)} 回合（叠加可加快）`
+        descStack: (lv)=>`触发间隔：每 ${getScalingValue(SKILL_SPECS.siege, 'interval', lv)} 回合（叠加可加快）`
     }
 };
 function getCastlingCooldown(level) {
-    return Math.max(4 - level + 1, 2);
+    return getScalingValue(SKILL_SPECS.castling, 'cooldown', level);
 }
 function getIntimidateChance(level) {
-    return Math.min(0.30 + (level - 1) * 0.15, 0.75);
+    return getScalingValue(SKILL_SPECS.intimidate, 'freezeChance', level);
 }
 function getSiegeInterval(level) {
-    return Math.max(3 - level + 1, 1);
+    return getScalingValue(SKILL_SPECS.siege, 'interval', level);
 }
 function getAuraRange(level) {
-    return Math.min(level, 2);
+    return getScalingValue(SKILL_SPECS.aura, 'auraRange', level);
 }
-function getNextSkillThreshold(lastScore) {
-    if (lastScore === 0) return 3;
-    if (lastScore === 3) return 7;
-    return lastScore + 5;
-}
-function grantRandomSkill(state) {
-    const skillId = SKILL_IDS[Math.floor(Math.random() * SKILL_IDS.length)];
+function grantSkill(state, skillId) {
+    const spec = SKILL_SPECS[skillId];
+    if (!spec || state.skills[skillId] >= spec.maxLevel) return false;
     state.skills[skillId]++;
     if (skillId === 'castling' && state.skills.castling === 1) {
         state.castlingCooldown = 0;
     }
     if (skillId === 'siege' && state.skills.siege === 1) {
-        state.siegeTimer = getSiegeInterval(1);
+        state.siegeTimer = getScalingValue(SKILL_SPECS.siege, 'interval', 1);
     }
-    return skillId;
-}
-function checkSkillTrigger(state) {
-    const acquired = [];
-    let nextThreshold = getNextSkillThreshold(state.lastSkillScore);
-    while(state.score >= nextThreshold){
-        state.lastSkillScore = nextThreshold;
-        const skillId = grantRandomSkill(state);
-        acquired.push(skillId);
-        nextThreshold = getNextSkillThreshold(state.lastSkillScore);
-    }
-    return acquired;
+    return true;
 }
 function applyIntimidateFreeze(state) {
     state.frozenEnemies.clear();
     if (state.skills.intimidate <= 0 || !state.player) return;
-    const chance = getIntimidateChance(state.skills.intimidate);
+    const chance = getScalingValue(SKILL_SPECS.intimidate, 'freezeChance', state.skills.intimidate);
     const px = state.player.position.x;
     const py = state.player.position.y;
     for (const enemy of state.enemies){
@@ -367,14 +486,13 @@ function applySiegeEffect(state) {
     if (state.skills.siege <= 0) return null;
     state.siegeTimer--;
     if (state.siegeTimer <= 0) {
-        state.siegeTimer = getSiegeInterval(state.skills.siege);
-        const livingPawns = state.enemies.filter((e)=>!e.isDead && e.type === EntityType.PAWN);
+        state.siegeTimer = getScalingValue(SKILL_SPECS.siege, 'interval', state.skills.siege);
+        const livingPawns = state.enemies.filter((e)=>!e.isDead && e.type === EntityType.SOLDIER);
         if (livingPawns.length > 0) {
             const target = livingPawns[Math.floor(Math.random() * livingPawns.length)];
             target.isDead = true;
             const cell = state.grid.cells.get(posKey(target.position));
             if (cell) cell.entity = null;
-            state.score += 1;
             return target.id;
         }
     }
@@ -388,7 +506,7 @@ function applyArmor(state) {
 function checkCastlingUsed(state, movedDist) {
     if (state.skills.castling <= 0 || state.castlingCooldown > 0) return false;
     if (movedDist > 1) {
-        state.castlingCooldown = getCastlingCooldown(state.skills.castling);
+        state.castlingCooldown = getScalingValue(SKILL_SPECS.castling, 'cooldown', state.skills.castling);
         return true;
     }
     return false;
@@ -397,6 +515,154 @@ function tickCastlingCooldown(state) {
     if (state.skills.castling > 0 && state.castlingCooldown > 0) {
         state.castlingCooldown--;
     }
+}
+
+// ---- src/core/ShopSystem.ts ----
+function getNextShopThreshold(lastScore) {
+    if (lastScore === 0) return 3;
+    if (lastScore === 3) return 7;
+    return lastScore + 5;
+}
+function awardScore(state, amount) {
+    const gained = Math.max(0, Math.floor(amount));
+    state.score += gained;
+    state.coins += gained;
+    return gained;
+}
+function getAvailableShopSkills(state) {
+    return SKILL_IDS.filter((id)=>state.skills[id] < SKILL_SPECS[id].maxLevel);
+}
+function generateShopOffers(state) {
+    const available = getAvailableShopSkills(state);
+    if (available.length === 0) return [];
+    const count = Math.min(SHOP_OFFER_COUNT, available.length);
+    const offers = [];
+    for(let i = 0; i < count; i++){
+        const skillId = available[Math.floor(Math.random() * available.length)];
+        offers.push({
+            id: `shop_${state.lastShopScore}_${i}`,
+            skillId,
+            price: SHOP_PRICE,
+            purchased: false
+        });
+    }
+    return offers;
+}
+function maybeOpenShop(state, now = Date.now()) {
+    let latestThreshold = state.lastShopScore;
+    let nextThreshold = getNextShopThreshold(latestThreshold);
+    while(state.score >= nextThreshold){
+        latestThreshold = nextThreshold;
+        nextThreshold = getNextShopThreshold(latestThreshold);
+    }
+    if (latestThreshold === state.lastShopScore) return false;
+    state.lastShopScore = latestThreshold;
+    state.shopOffers = generateShopOffers(state);
+    if (state.shopOffers.length === 0) return false;
+    state.phase = GamePhase.SHOP;
+    state.shopOpenedAt = now;
+    state.animating = false;
+    return true;
+}
+function canPurchaseOffer(state, offer) {
+    if (state.phase !== GamePhase.SHOP) return 'not_in_shop';
+    if (offer.purchased) return 'sold_out';
+    if (state.skills[offer.skillId] >= SKILL_SPECS[offer.skillId].maxLevel) return 'max_level';
+    if (state.coins < offer.price) return 'insufficient_coins';
+    return 'purchased';
+}
+function purchaseShopOffer(state, offerId) {
+    const offer = state.shopOffers.find((item)=>item.id === offerId);
+    if (!offer) return 'invalid_offer';
+    const status = canPurchaseOffer(state, offer);
+    if (status !== 'purchased') return status;
+    if (!grantSkill(state, offer.skillId)) return 'max_level';
+    state.coins -= offer.price;
+    offer.purchased = true;
+    return 'purchased';
+}
+function closeShop(state, now = Date.now()) {
+    if (state.phase !== GamePhase.SHOP) return state.phase;
+    if (state.shopOpenedAt !== undefined) {
+        state.pausedDurationMs += Math.max(0, now - state.shopOpenedAt);
+    }
+    state.phase = GamePhase.PLAYER_TURN;
+    state.shopOpenedAt = undefined;
+    state.shopOffers = [];
+    return state.phase;
+}
+function getElapsedGameMs(state, now = Date.now()) {
+    const end = state.finishedAt ?? now;
+    const activeShopPause = state.phase === GamePhase.SHOP && state.shopOpenedAt !== undefined ? Math.max(0, end - state.shopOpenedAt) : 0;
+    return Math.max(0, end - state.startedAt - state.pausedDurationMs - activeShopPause);
+}
+
+// ---- src/core/Leaderboard.ts ----
+const MAX_ENTRIES = 10;
+const MAX_NAME_LENGTH = 12;
+const ANONYMOUS_NAME = '匿名';
+function compareEntries(a, b) {
+    if (a.score !== b.score) return b.score - a.score;
+    if (a.elapsedSec !== b.elapsedSec) return a.elapsedSec - b.elapsedSec;
+    return a.timestamp - b.timestamp;
+}
+function normalizeName(raw) {
+    const trimmed = (raw || '').trim();
+    if (trimmed.length === 0) return ANONYMOUS_NAME;
+    if (trimmed.length > MAX_NAME_LENGTH) return trimmed.slice(0, MAX_NAME_LENGTH);
+    return trimmed;
+}
+function parseEntries(raw) {
+    if (!raw) return [];
+    try {
+        const data = JSON.parse(raw);
+        if (!Array.isArray(data)) return [];
+        const entries = [];
+        for (const item of data){
+            if (item && typeof item.name === 'string' && typeof item.score === 'number' && typeof item.turn === 'number' && typeof item.elapsedSec === 'number' && typeof item.isVictory === 'boolean' && typeof item.timestamp === 'number') {
+                entries.push(item);
+            }
+        }
+        entries.sort(compareEntries);
+        return entries.slice(0, MAX_ENTRIES);
+    } catch (_e) {
+        return [];
+    }
+}
+function loadLeaderboard(storage) {
+    return parseEntries(storage.read());
+}
+function insertEntry(storage, entry) {
+    const next = parseEntries(storage.read());
+    next.push(entry);
+    next.sort(compareEntries);
+    const truncated = next.slice(0, MAX_ENTRIES);
+    try {
+        storage.write(JSON.stringify(truncated));
+    } catch (_e) {}
+    return truncated;
+}
+function clearLeaderboard(storage) {
+    try {
+        storage.write(JSON.stringify([]));
+    } catch (_e) {}
+}
+function getRank(entries, entry) {
+    for(let i = 0; i < entries.length; i++){
+        if (entries[i].timestamp === entry.timestamp && entries[i].name === entry.name) {
+            return i + 1;
+        }
+    }
+    return null;
+}
+function formatElapsed(totalSec) {
+    const sec = Math.max(0, Math.floor(totalSec));
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor(sec % 3600 / 60);
+    const s = sec % 60;
+    const pad = (n)=>n < 10 ? '0' + n : '' + n;
+    if (h > 0) return `${pad(h)}:${pad(m)}:${pad(s)}`;
+    return `${pad(m)}:${pad(s)}`;
 }
 
 // ---- src/core/GameLogic.ts ----
@@ -490,6 +756,7 @@ function createInitialState() {
         phase: GamePhase.PLAYER_TURN,
         turn: 1,
         score: 0,
+        coins: 0,
         grid,
         entities: new Map([
             [
@@ -500,12 +767,15 @@ function createInitialState() {
         player,
         enemies: [],
         animating: false,
-        lastSkillScore: 0,
+        lastShopScore: 0,
+        shopOffers: [],
+        pausedDurationMs: 0,
         skills,
         castlingCooldown: 0,
         siegeTimer: 0,
         frozenEnemies: new Set(),
-        killStreak: 0
+        killStreak: 0,
+        startedAt: Date.now()
     };
     updatePlayerAccessiblePositions(state);
     updateThreatMap(state);
@@ -948,7 +1218,7 @@ function handlePlayerMove(state, targetPos) {
         moved: false,
         scoreGained: 0,
         castlingUsed: false,
-        skillAcquired: []
+        shopOpened: false
     };
     if (state.phase !== GamePhase.PLAYER_TURN || !state.player) return result;
     const targetCell = cellAt(state.grid, targetPos);
@@ -960,8 +1230,7 @@ function handlePlayerMove(state, targetPos) {
         killedEnemy = true;
         state.killStreak = Math.min(state.killStreak + 1, SCORE_CONFIG.maxKillStreak);
         const gained = scoreFor(enemy.type) * state.killStreak;
-        state.score += gained;
-        result.scoreGained = gained;
+        result.scoreGained = awardScore(state, gained);
         result.killedEnemyId = enemy.id;
         result.killedEnemyType = enemy.type;
     }
@@ -972,10 +1241,14 @@ function handlePlayerMove(state, targetPos) {
     result.castlingUsed = checkCastlingUsed(state, movedDist);
     state.player.position = posClone(targetPos);
     targetCell.entity = state.player;
-    result.skillAcquired = checkSkillTrigger(state);
     calculateEnemyMoves(state);
     state.phase = GamePhase.ENEMY_TURN;
     state.animating = true;
+    result.shopOpened = maybeOpenShop(state);
+    if (result.shopOpened) {
+        updatePlayerAccessiblePositions(state);
+        updateThreatMap(state);
+    }
     result.moved = true;
     return result;
 }
@@ -985,7 +1258,7 @@ function executeEnemyTurn(state) {
         armorBlocked: false,
         siegeKillId: null
     };
-    if (!state.player) return result;
+    if (!state.player || state.phase !== GamePhase.ENEMY_TURN) return result;
     applyIntimidateFreeze(state);
     updateThreatMap(state);
     let playerDead = false;
@@ -1009,6 +1282,7 @@ function executeEnemyTurn(state) {
         state.player.isDead = true;
         state.phase = GamePhase.GAME_OVER;
         state.isVictory = false;
+        state.finishedAt = Date.now();
         state.deathMessage = `被 ${killer?.type || '敌人'} 击杀`;
         result.playerDead = true;
         return result;
@@ -1029,8 +1303,8 @@ function executeEnemyTurn(state) {
         }
     }
     result.siegeKillId = applySiegeEffect(state);
+    if (result.siegeKillId) awardScore(state, SCORE_CONFIG.soldierKill);
     tickCastlingCooldown(state);
-    checkSkillTrigger(state);
     state.turn++;
     if (state.turn % SCORE_CONFIG.deadCleanupInterval === 0) {
         state.enemies = state.enemies.filter((e)=>!e.isDead);
@@ -1041,6 +1315,7 @@ function executeEnemyTurn(state) {
     updateThreatMap(state);
     state.phase = GamePhase.PLAYER_TURN;
     state.animating = false;
+    maybeOpenShop(state);
     return result;
 }
 function isGameOver(state) {
@@ -1073,6 +1348,9 @@ function formatBoardAscii(state) {
 }
 
 // ---- src/render/canvas-renderer.ts ----
+function formatGameTime(state) {
+    return formatElapsed(getElapsedGameMs(state) / 1000);
+}
 class CanvasRenderer {
     canvas;
     ctx;
@@ -1268,15 +1546,47 @@ class CanvasRenderer {
         this.ctx.font = '16px Arial, sans-serif';
         this.ctx.fillText(`回合: ${state.turn}`, leftX, topY + 42);
         this.ctx.fillText(`分数: ${state.score}`, leftX, topY + 68);
-        this.ctx.fillText(`阶段: ${this.getPhaseText(state.phase)}`, leftX, topY + 94);
+        this.ctx.fillText(`金币: ${state.coins}`, leftX, topY + 94);
+        this.ctx.fillText(`时间: ${formatGameTime(state)}`, leftX, topY + 120);
+        this.ctx.fillText(`阶段: ${this.getPhaseText(state.phase)}`, leftX, topY + 146);
+        const skillsBaseY = topY + 186;
+        const skillsHeight = this.drawSkillsPanel(state, leftX, skillsBaseY);
         if (state.phase === 'game_over') {
+            const gameOverY = skillsBaseY + skillsHeight + 16;
             this.ctx.fillStyle = COLORS.text.accent;
             this.ctx.font = 'bold 20px Arial, sans-serif';
-            this.ctx.fillText('游戏结束', leftX, topY + 134);
+            this.ctx.fillText('游戏结束', leftX, gameOverY);
             this.ctx.font = '14px Arial, sans-serif';
-            this.ctx.fillText(state.deathMessage || '被将死', leftX, topY + 164);
-            this.ctx.fillText('刷新页面重新开始', leftX, topY + 190);
+            this.ctx.fillText(state.deathMessage || '被将死', leftX, gameOverY + 30);
+            this.ctx.fillText('刷新页面重新开始', leftX, gameOverY + 56);
         }
+    }
+    drawSkillsPanel(state, x, y) {
+        const titleHeight = 22;
+        const lineHeight = 22;
+        this.ctx.fillStyle = COLORS.text.primary;
+        this.ctx.font = 'bold 16px Arial, sans-serif';
+        this.ctx.fillText('技能', x, y);
+        let cursorY = y + titleHeight;
+        let hasAny = false;
+        for (const id of Object.keys(state.skills)){
+            const level = state.skills[id];
+            if (!level || level <= 0) continue;
+            const def = SKILL_DEFS[id];
+            if (!def) continue;
+            hasAny = true;
+            this.ctx.fillStyle = COLORS.text.secondary;
+            this.ctx.font = '14px Arial, sans-serif';
+            this.ctx.fillText(`${def.icon} ${def.name} Lv.${level}`, x, cursorY);
+            cursorY += lineHeight;
+        }
+        if (!hasAny) {
+            this.ctx.fillStyle = COLORS.text.secondary;
+            this.ctx.font = '13px Arial, sans-serif';
+            this.ctx.fillText('达到积分阈值可在商店购买技能', x, cursorY);
+            cursorY += lineHeight;
+        }
+        return cursorY - y;
     }
     getPhaseText(phase) {
         const phaseMap = {
@@ -1284,6 +1594,7 @@ class CanvasRenderer {
             enemy_turn: '敌人行动',
             animating: '动画中',
             spawning: '生成中',
+            shop: '商店',
             game_over: '游戏结束'
         };
         return phaseMap[phase] || phase;
@@ -1311,6 +1622,21 @@ class CanvasRenderer {
 
 
 // ---- browser app ----
+const STORAGE_KEY = 'xili_leaderboard_v1';
+const NAME_KEY = 'xili_last_player_name';
+
+const browserStorage = {
+  read()  { try { return localStorage.getItem(STORAGE_KEY); } catch (_) { return null; } },
+  write(v){ try { localStorage.setItem(STORAGE_KEY, v); } catch (_) { /* private mode */ } },
+};
+
+function readLastName() {
+  try { return localStorage.getItem(NAME_KEY) || ''; } catch (_) { return ''; }
+}
+function writeLastName(name) {
+  try { localStorage.setItem(NAME_KEY, name); } catch (_) { /* ignore */ }
+}
+
 function createDemoState() {
   const state = createInitialState();
   spawnEnemies(state);
@@ -1318,10 +1644,177 @@ function createDemoState() {
   return state;
 }
 
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function renderLeaderboardOverlay(state, currentEntry) {
+  const overlay = document.getElementById('leaderboard-overlay');
+  if (!overlay) return;
+  const entries = loadLeaderboard(browserStorage);
+  const rank = currentEntry ? getRank(entries, currentEntry) : null;
+
+  let rowsHtml;
+  if (entries.length === 0) {
+    rowsHtml = '<div class="leaderboard-empty">尚无记录</div>';
+  } else {
+    const rows = entries.map((e, i) => {
+      const isCurrent = currentEntry && e.timestamp === currentEntry.timestamp && e.name === currentEntry.name;
+      const cls = isCurrent ? ' class="current"' : '';
+      const mark = e.isVictory ? ' 🏆' : '';
+      return '<tr' + cls + '>' +
+        '<td class="rank">' + (i + 1) + '</td>' +
+        '<td>' + escapeHtml(e.name) + mark + '</td>' +
+        '<td class="score">' + e.score + '</td>' +
+        '<td class="time">' + formatElapsed(e.elapsedSec) + '</td>' +
+        '</tr>';
+    }).join('');
+    rowsHtml = '<table class="leaderboard-table">' +
+      '<thead><tr><th>#</th><th>名字</th><th>分数</th><th>时间</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table>';
+  }
+
+  const rankLine = rank
+    ? '<div class="rank-line">本局排名：第 ' + rank + ' 名</div>'
+    : (currentEntry ? '<div class="rank-line">未上榜（成绩低于第 10 名）</div>' : '');
+
+  const closeLabel = currentEntry ? '再来一局' : '关闭';
+  const closeAction = currentEntry ? 'restart' : 'close';
+
+  overlay.innerHTML =
+    '<div class="modal">' +
+      '<h2>🏆 排行榜 (Top 10)</h2>' +
+      rankLine +
+      rowsHtml +
+      '<div class="actions">' +
+        '<button type="button" class="secondary" data-action="clear">清空榜单</button>' +
+        '<button type="button" data-action="' + closeAction + '">' + closeLabel + '</button>' +
+      '</div>' +
+    '</div>';
+  overlay.hidden = false;
+
+  const closeBtn = overlay.querySelector('[data-action="restart"], [data-action="close"]');
+  closeBtn.addEventListener('click', () => {
+    overlay.hidden = true;
+    overlay.innerHTML = '';
+    if (closeAction === 'restart') {
+      window.__xiliRestart && window.__xiliRestart();
+    }
+  });
+  overlay.querySelector('[data-action="clear"]').addEventListener('click', () => {
+    if (window.confirm('确定清空全部历史记录？此操作无法撤销。')) {
+      clearLeaderboard(browserStorage);
+      renderLeaderboardOverlay(state, currentEntry);
+    }
+  });
+}
+
+function renderResultOverlay(state) {
+  const overlay = document.getElementById('leaderboard-overlay');
+  if (!overlay) return;
+
+  const elapsedSec = Math.floor(getElapsedGameMs(state) / 1000);
+  const lastName = readLastName();
+
+  overlay.innerHTML =
+    '<div class="modal">' +
+      '<h2>' + (state.isVictory ? '胜利！' : '游戏结束') + '</h2>' +
+      '<div class="stats">' +
+        '<span class="k">得分</span><span class="v">' + state.score + '</span>' +
+        '<span class="k">回合</span><span class="v">' + state.turn + '</span>' +
+        '<span class="k">时间</span><span class="v">' + formatElapsed(elapsedSec) + '</span>' +
+      '</div>' +
+      '<label for="player-name">你的名字</label>' +
+      '<input id="player-name" type="text" maxlength="' + MAX_NAME_LENGTH + '" placeholder="匿名" value="' + escapeHtml(lastName) + '">' +
+      '<div class="actions">' +
+        '<button type="button" class="secondary" data-action="skip">不保存</button>' +
+        '<button type="button" data-action="save">保存成绩</button>' +
+      '</div>' +
+    '</div>';
+  overlay.hidden = false;
+
+  const input = overlay.querySelector('#player-name');
+  input.focus();
+  input.select();
+
+  function save() {
+    const rawName = input.value;
+    const name = normalizeName(rawName);
+    writeLastName(name);
+    const entry = {
+      name,
+      score: state.score,
+      turn: state.turn,
+      elapsedSec,
+      isVictory: !!state.isVictory,
+      timestamp: Date.now(),
+    };
+    insertEntry(browserStorage, entry);
+    renderLeaderboardOverlay(state, entry);
+  }
+  function skip() {
+    const entry = {
+      name: normalizeName(input.value),
+      score: state.score,
+      turn: state.turn,
+      elapsedSec,
+      isVictory: !!state.isVictory,
+      timestamp: Date.now(),
+    };
+    // 不写入 storage，但传入 currentEntry 仅用于在榜外提示「未上榜」
+    renderLeaderboardOverlay(state, entry);
+  }
+
+  overlay.querySelector('[data-action="save"]').addEventListener('click', save);
+  overlay.querySelector('[data-action="skip"]').addEventListener('click', skip);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); save(); }
+  });
+}
+
+function renderShopOverlay(state, onClose) {
+  const overlay = document.getElementById('leaderboard-overlay');
+  if (!overlay) return;
+  const cards = state.shopOffers.map(offer => {
+    const spec = SKILL_SPECS[offer.skillId];
+    const status = canPurchaseOffer(state, offer);
+    const disabled = status !== 'purchased';
+    const label = offer.purchased ? '售罄'
+      : status === 'max_level' ? '已满级'
+      : status === 'insufficient_coins' ? '金币不足'
+      : offer.price + ' 金币购买';
+    return '<article class="shop-card" data-offer-id="' + offer.id + '">' +
+      '<h3>' + escapeHtml(spec.icon + ' ' + spec.name) + ' Lv.' + state.skills[offer.skillId] + '</h3>' +
+      '<p>' + escapeHtml(spec.desc) + '</p>' +
+      '<button type="button" data-action="buy" data-offer-id="' + offer.id + '"' +
+        (disabled ? ' disabled' : '') + '>' + label + '</button>' +
+      '</article>';
+  }).join('');
+
+  overlay.innerHTML =
+    '<div class="modal shop-modal">' +
+      '<h2>技能商店</h2>' +
+      '<div class="rank-line">金币：<span data-shop-coins>' + state.coins + '</span></div>' +
+      '<div class="shop-cards">' + cards + '</div>' +
+      '<div class="actions"><button type="button" data-action="continue">继续战斗</button></div>' +
+    '</div>';
+  overlay.hidden = false;
+  overlay.querySelectorAll('[data-action="buy"]').forEach(button => {
+    button.addEventListener('click', () => {
+      purchaseShopOffer(state, button.getAttribute('data-offer-id'));
+      renderShopOverlay(state, onClose);
+    });
+  });
+  overlay.querySelector('[data-action="continue"]').addEventListener('click', onClose);
+}
+
 function startWebDemo() {
   const canvas = document.getElementById('game-canvas');
   const status = document.getElementById('status');
   const restartButton = document.getElementById('restart-button');
+  const overlay = document.getElementById('leaderboard-overlay');
   if (!canvas) throw new Error('Missing #game-canvas');
 
   const dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -1339,6 +1832,8 @@ function startWebDemo() {
   renderCanvas.height = cssHeight;
   const renderer = new CanvasRenderer(renderCanvas);
   let state = createDemoState();
+  let lastShownPhase = null;
+  let tickHandle = null;
 
   function draw() {
     renderer.render(state);
@@ -1349,18 +1844,46 @@ function startWebDemo() {
         ? (state.deathMessage || '游戏结束')
         : '点击绿色交点移动，红色区域为敌方威胁。';
     }
+    // 进入 GAME_OVER 时打开结算面板（只触发一次）
+    if (state.phase === GamePhase.SHOP && lastShownPhase !== GamePhase.SHOP) {
+      renderShopOverlay(state, continueAfterShop);
+    }
+    if (state.phase === GamePhase.GAME_OVER && lastShownPhase !== GamePhase.GAME_OVER) {
+      stopTick();
+      renderResultOverlay(state);
+    }
+    lastShownPhase = state.phase;
+  }
+
+  function startTick() {
+    if (tickHandle) return;
+    tickHandle = window.setInterval(() => {
+      if (state.phase !== GamePhase.GAME_OVER) draw();
+    }, 1000);
+  }
+  function stopTick() {
+    if (tickHandle) { window.clearInterval(tickHandle); tickHandle = null; }
   }
 
   function restart() {
+    if (overlay) { overlay.hidden = true; overlay.innerHTML = ''; }
     state = createDemoState();
+    lastShownPhase = null;
+    startTick();
+    draw();
+  }
+  window.__xiliRestart = restart;
+
+  function continueAfterShop() {
+    closeShop(state);
+    if (overlay) { overlay.hidden = true; overlay.innerHTML = ''; }
+    lastShownPhase = null;
     draw();
   }
 
   canvas.addEventListener('click', (event) => {
-    if (state.phase === GamePhase.GAME_OVER) {
-      restart();
-      return;
-    }
+    if (overlay && !overlay.hidden) return; // 弹窗时禁用棋盘点击
+    if (state.phase === GamePhase.GAME_OVER) return;
     if (state.phase !== GamePhase.PLAYER_TURN || state.animating) return;
 
     const rect = canvas.getBoundingClientRect();
@@ -1380,8 +1903,77 @@ function startWebDemo() {
   });
 
   if (restartButton) restartButton.addEventListener('click', restart);
+  const leaderboardButton = document.getElementById('leaderboard-button');
+  if (leaderboardButton) leaderboardButton.addEventListener('click', () => {
+    renderLeaderboardOverlay(state, null);
+  });
+  startTick();
   draw();
-  window.ProjectXiliDemo = { getState: () => state, restart };
+  window.ProjectXiliDemo = {
+    getState: () => state,
+    restart,
+    // —— 测试钩子；生产环境无害，仅供 Playwright E2E 使用 ——
+    __test: {
+      forceGameOver(opts) {
+        opts = opts || {};
+        state.score = opts.score == null ? 0 : opts.score;
+        state.turn = opts.turn == null ? 1 : opts.turn;
+        state.startedAt = Date.now() - (opts.elapsedSec || 0) * 1000;
+        state.finishedAt = Date.now();
+        state.isVictory = !!opts.isVictory;
+        state.deathMessage = opts.message || '测试触发';
+        state.phase = GamePhase.GAME_OVER;
+        draw();
+      },
+      clearStorage() {
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(NAME_KEY);
+        } catch (_) { /* ignore */ }
+      },
+      seedLeaderboard(entries) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+        } catch (_) { /* ignore */ }
+      },
+      seedLeaderboardRaw(rawString) {
+        try {
+          localStorage.setItem(STORAGE_KEY, rawString);
+        } catch (_) { /* ignore */ }
+      },
+      readLeaderboard() {
+        try { return localStorage.getItem(STORAGE_KEY); } catch (_) { return null; }
+      },
+      seedLastName(name) {
+        try { localStorage.setItem(NAME_KEY, name); } catch (_) { /* ignore */ }
+      },
+      grantSkill(id) {
+        // Explicit test-only grant path; production skill growth goes through shop purchases.
+        if (!grantSkill(state, id)) throw new Error('cannot grant skill: ' + id);
+        draw();
+      },
+      setSkillLevel(id, level) {
+        if (state.skills[id] == null) throw new Error('unknown skill: ' + id);
+        state.skills[id] = level;
+        draw();
+      },
+      // 暴露纯函数给端到端测试断言（非 UI 路径）
+      getScalingValue: getScalingValue,
+      SKILL_SPECS: SKILL_SPECS,
+      awardScore(amount) { awardScore(state, amount); draw(); },
+      openShop(now) { const opened = maybeOpenShop(state, now); draw(); return opened; },
+      purchaseOffer(id) { const result = purchaseShopOffer(state, id); draw(); return result; },
+      closeShop() { continueAfterShop(); },
+      setShopOffers(skillIds) {
+        state.shopOffers = skillIds.map((skillId, i) => ({ id: 'test_' + i, skillId, price: SHOP_PRICE, purchased: false }));
+        state.phase = GamePhase.SHOP;
+        state.shopOpenedAt = Date.now();
+        draw();
+      },
+      getElapsedGameMs: () => getElapsedGameMs(state),
+      executeEnemyTurn: () => executeEnemyTurn(state),
+    },
+  };
 }
 
 if (document.readyState === 'loading') {

@@ -22,6 +22,9 @@ const CORE_FILES = [
   { source: ['GameConfig.ts'], target: 'GameConfig.ts' },
   { source: ['GameLogic.ts'], target: 'GameLogic.ts' },
   { source: ['SkillSystem.ts'], target: 'SkillSystem.ts' },
+  { source: ['SkillSpecs.ts'], target: 'SkillSpecs.ts' },
+  { source: ['ShopSystem.ts'], target: 'ShopSystem.ts' },
+  { source: ['Leaderboard.ts'], target: 'Leaderboard.ts' },
   { source: ['Types.ts', 'types.ts'], target: 'Types.ts' },
   { source: ['Utils.ts', 'utils.ts'], target: 'Utils.ts' },
 ];

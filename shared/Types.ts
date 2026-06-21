@@ -56,12 +56,46 @@ export enum GamePhase {
   ENEMY_TURN = 'enemy_turn',
   ANIMATING = 'animating',
   SPAWNING = 'spawning',
+  SHOP = 'shop',
   GAME_OVER = 'game_over',
 }
 
 export type SkillId = 'armor' | 'intimidate' | 'castling' | 'aura' | 'siege';
 
 export const SKILL_IDS: SkillId[] = ['armor', 'intimidate', 'castling', 'aura', 'siege'];
+
+// ----------------------------------------------------------------------------
+// 数据驱动技能定义（SkillSpec）
+// ----------------------------------------------------------------------------
+
+export enum SkillType {
+  DAMAGE   = 'damage',
+  MOVEMENT = 'movement',
+  DEFENSE  = 'defense',
+  UTILITY  = 'utility',
+}
+
+export enum Faction {
+  GENERAL  = 'general',   // 帅
+  ROOK     = 'rook',      // 车
+  KNIGHT   = 'knight',    // 马
+  CANNON   = 'cannon',    // 炮
+  ELEPHANT = 'elephant',  // 相
+  SOLDIER  = 'soldier',   // 兵
+}
+
+export interface SkillSpec {
+  id:       string;
+  name:     string;
+  desc:     string;
+  flavor:   string;
+  types:    SkillType[];
+  faction:  Faction;
+  icon:     string;
+  maxLevel: number;
+  /** key=数值名, value=每级的值（索引 0 = 1 级） */
+  scaling:  Record<string, number[]>;
+}
 
 export interface SkillLevels {
   armor: number;
@@ -71,21 +105,34 @@ export interface SkillLevels {
   siege: number;
 }
 
+export interface ShopOffer {
+  id: string;
+  skillId: SkillId;
+  price: number;
+  purchased: boolean;
+}
+
 export interface GameState {
   phase: GamePhase;
   turn: number;
   score: number;
+  coins: number;
   grid: Grid;
   entities: Map<string, Entity>;
   player: Entity | null;
   enemies: Entity[];
   animating: boolean;
-  lastSkillScore: number;
+  lastShopScore: number;
+  shopOffers: ShopOffer[];
+  shopOpenedAt?: number;
+  pausedDurationMs: number;
   skills: SkillLevels;
   castlingCooldown: number;
   siegeTimer: number;
   frozenEnemies: Set<string>;
   killStreak: number;
+  startedAt: number;          // 对局开始时刻（Date.now()，毫秒），用于计算生存时间
+  finishedAt?: number;        // 对局结束时刻（GAME_OVER 触发时写入）
   isVictory?: boolean;
   deathMessage?: string;
 }
