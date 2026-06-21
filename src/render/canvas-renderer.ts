@@ -7,12 +7,11 @@ import { BOARD_WIDTH, BOARD_HEIGHT } from '../core/GameConfig';
 import { GameState, Entity, Position } from '../core/types';
 import { SKILL_DEFS } from '../core/SkillSystem';
 import { formatElapsed } from '../core/Leaderboard';
+import { getElapsedGameMs } from '../core/ShopSystem';
 
-/** 当前 wall-clock 生存时间（秒）。GAME_OVER 后用 finishedAt 冻结。 */
+/** 当前有效生存时间（秒）：商店暂停不计入，GAME_OVER 后冻结。 */
 function formatGameTime(state: GameState): string {
-  const endMs = state.finishedAt ?? Date.now();
-  const elapsedMs = Math.max(0, endMs - state.startedAt);
-  return formatElapsed(elapsedMs / 1000);
+  return formatElapsed(getElapsedGameMs(state) / 1000);
 }
 
 export class CanvasRenderer {
@@ -224,10 +223,11 @@ export class CanvasRenderer {
     this.ctx.font = '16px Arial, sans-serif';
     this.ctx.fillText(`回合: ${state.turn}`, leftX, topY + 42);
     this.ctx.fillText(`分数: ${state.score}`, leftX, topY + 68);
-    this.ctx.fillText(`时间: ${formatGameTime(state)}`, leftX, topY + 94);
-    this.ctx.fillText(`阶段: ${this.getPhaseText(state.phase)}`, leftX, topY + 120);
+    this.ctx.fillText(`金币: ${state.coins}`, leftX, topY + 94);
+    this.ctx.fillText(`时间: ${formatGameTime(state)}`, leftX, topY + 120);
+    this.ctx.fillText(`阶段: ${this.getPhaseText(state.phase)}`, leftX, topY + 146);
 
-    const skillsBaseY = topY + 160;
+    const skillsBaseY = topY + 186;
     const skillsHeight = this.drawSkillsPanel(state, leftX, skillsBaseY);
 
     if (state.phase === 'game_over') {
@@ -270,7 +270,7 @@ export class CanvasRenderer {
     if (!hasAny) {
       this.ctx.fillStyle = COLORS.text.secondary;
       this.ctx.font = '13px Arial, sans-serif';
-      this.ctx.fillText('每得5分获得一个随机技能', x, cursorY);
+      this.ctx.fillText('达到积分阈值可在商店购买技能', x, cursorY);
       cursorY += lineHeight;
     }
 
@@ -283,6 +283,7 @@ export class CanvasRenderer {
       enemy_turn: '敌人行动',
       animating: '动画中',
       spawning: '生成中',
+      shop: '商店',
       game_over: '游戏结束',
     };
     return phaseMap[phase] || phase;

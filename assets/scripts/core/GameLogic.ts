@@ -24,7 +24,6 @@ import {
   shuffle,
 } from './Utils';
 import {
-  checkSkillTrigger,
   applyIntimidateFreeze,
   applySiegeEffect,
   applyArmor,
@@ -32,6 +31,7 @@ import {
   tickCastlingCooldown,
   getAuraRange,
 } from './SkillSystem';
+import { awardScore, maybeOpenShop } from './ShopSystem';
 import { BOARD_WIDTH, BOARD_HEIGHT, SPAWN_CONFIG, SCORE_CONFIG } from './GameConfig';
 
 const ORTHOGONAL = [
@@ -101,12 +101,15 @@ export function createInitialState(): GameState {
     phase: GamePhase.PLAYER_TURN,
     turn: 1,
     score: 0,
+    coins: 0,
     grid,
     entities: new Map([[player.id, player]]),
     player,
     enemies: [],
     animating: false,
-    lastSkillScore: 0,
+    lastShopScore: 0,
+    shopOffers: [],
+    pausedDurationMs: 0,
     skills,
     castlingCooldown: 0,
     siegeTimer: 0,
@@ -460,7 +463,7 @@ export interface MoveResult {
   killedEnemyType?: EntityType;
   scoreGained: number;
   castlingUsed: boolean;
-  skillAcquired: string[];
+  shopOpened: boolean;
 }
 
 function scoreFor(type: EntityType): number {
@@ -485,7 +488,7 @@ function scoreFor(type: EntityType): number {
 }
 
 export function handlePlayerMove(state: GameState, targetPos: { x: number; y: number }): MoveResult {
-  const result: MoveResult = { moved: false, scoreGained: 0, castlingUsed: false, skillAcquired: [] };
+  const result: MoveResult = { moved: false, scoreGained: 0, castlingUsed: false, shopOpened: false };
   if (state.phase !== GamePhase.PLAYER_TURN || !state.player) return result;
 
   const targetCell = cellAt(state.grid, targetPos);
@@ -498,8 +501,7 @@ export function handlePlayerMove(state: GameState, targetPos: { x: number; y: nu
     killedEnemy = true;
     state.killStreak = Math.min(state.killStreak + 1, SCORE_CONFIG.maxKillStreak);
     const gained = scoreFor(enemy.type) * state.killStreak;
-    state.score += gained;
-    result.scoreGained = gained;
+    result.scoreGained = awardScore(state, gained);
     result.killedEnemyId = enemy.id;
     result.killedEnemyType = enemy.type;
   }
@@ -517,11 +519,14 @@ export function handlePlayerMove(state: GameState, targetPos: { x: number; y: nu
 
   state.player.position = posClone(targetPos);
   targetCell.entity = state.player;
-  result.skillAcquired = checkSkillTrigger(state);
-
   calculateEnemyMoves(state);
   state.phase = GamePhase.ENEMY_TURN;
   state.animating = true;
+  result.shopOpened = maybeOpenShop(state);
+  if (result.shopOpened) {
+    updatePlayerAccessiblePositions(state);
+    updateThreatMap(state);
+  }
   result.moved = true;
   return result;
 }
@@ -534,7 +539,7 @@ export interface EnemyTurnResult {
 
 export function executeEnemyTurn(state: GameState): EnemyTurnResult {
   const result: EnemyTurnResult = { playerDead: false, armorBlocked: false, siegeKillId: null };
-  if (!state.player) return result;
+  if (!state.player || state.phase !== GamePhase.ENEMY_TURN) return result;
 
   applyIntimidateFreeze(state);
   updateThreatMap(state);
@@ -590,8 +595,8 @@ export function executeEnemyTurn(state: GameState): EnemyTurnResult {
   }
 
   result.siegeKillId = applySiegeEffect(state);
+  if (result.siegeKillId) awardScore(state, SCORE_CONFIG.soldierKill);
   tickCastlingCooldown(state);
-  checkSkillTrigger(state);
   state.turn++;
 
   if (state.turn % SCORE_CONFIG.deadCleanupInterval === 0) {
@@ -604,6 +609,7 @@ export function executeEnemyTurn(state: GameState): EnemyTurnResult {
   updateThreatMap(state);
   state.phase = GamePhase.PLAYER_TURN;
   state.animating = false;
+  maybeOpenShop(state);
   return result;
 }
 

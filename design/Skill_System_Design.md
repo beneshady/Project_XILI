@@ -1,7 +1,7 @@
 # 技能系统设计文档 (Skill System Design)
 
-**版本**: v0.2
-**日期**: 2026-06-09
+**版本**: v0.3
+**日期**: 2026-06-15
 **状态**: 框架已落地，技能持续扩展中
 
 ---
@@ -21,7 +21,7 @@
 
 | 时机 | 描述 |
 |------|------|
-| **击败敌人达阈值** | 按 `getNextSkillThreshold` 阶梯（3 / 7 / +5），到达阈值自动 grant 一个随机技能 |
+| **商店购买** | 达到 3 / 7 / +5 积分阈值后进入商店，消耗金币购买候选技能 |
 | **局前选择** | （规划中）开局时可选携带 1-2 个被动技能 |
 
 ---
@@ -169,28 +169,27 @@ function getSkillsByFaction(faction: Faction): SkillSpec[];
 
 ## 4. 技能获取与成长
 
-### 4.1 Roll 系统（当前实现）
+### 4.1 商店系统（当前实现）
 
-- 触发：得分达到下一阈值时（由 `getNextSkillThreshold` 决定）
-- 行为：调用 `grantRandomSkill(state)` 从 `Object.keys(SKILL_SPECS)` **均匀随机** 选一个
-- 同名技能再次获得 → `state.skills[id]++`（等级 +1，受 `maxLevel` 约束的检查由 UI/调用方处理）
+- 触发：得分达到下一商店阈值时，由安全流程点打开商店
+- 行为：商店随机生成最多 3 个候选，允许重复；每个候选统一价格 5 金币
+- 玩家可购买任意数量或零购买关闭；每个候选只能购买一次
+- 同名技能再次购买会升级，但不会超过 `SkillSpec.maxLevel`
+- 具体规则见 [design/gdd/shop-system.md](gdd/shop-system.md)
 
 ### 4.2 阈值阶梯
 
 ```
-lastSkillScore: 0 → 下一阈值: 3
-lastSkillScore: 3 → 下一阈值: 7
-lastSkillScore: N (N>=7) → 下一阈值: N + 5
+lastShopScore: 0 → 下一阈值: 3
+lastShopScore: 3 → 下一阈值: 7
+lastShopScore: N (N>=7) → 下一阈值: N + 5
 ```
 
-由 `getNextSkillThreshold(lastScore)` 实现。
+由 `getNextShopThreshold(lastScore)` 实现。
 
-### 4.3 规划中：三选一
+### 4.3 候选生成
 
-当前是单选随机。后续可改为：
-- 一次 grant 提供 3 个候选 → 玩家选 1
-- 候选可按流派/稀有度加权
-- 候选生成函数应消费同一份 `SKILL_SPECS` 表，无需新增技能时改 UI 代码
+候选从未满级技能池中均匀随机生成，允许重复。候选不足时少于 3 个；全部满级时跳过商店但仍推进阈值。
 
 ---
 
@@ -249,8 +248,8 @@ lastSkillScore: N (N>=7) → 下一阈值: N + 5
 
 | 行为 | 当前位置 | 是否应数据化 |
 |---|---|---|
-| `grantRandomSkill` 中 castling 首次获得重置冷却 | `SkillSystem.ts` | 暂保留特例 |
-| `grantRandomSkill` 中 siege 首次获得初始化 timer | `SkillSystem.ts` | 暂保留特例 |
+| `grantSkill` 中 castling 首次获得重置冷却 | `SkillSystem.ts` | 商店购买沿用此特例 |
+| `grantSkill` 中 siege 首次获得初始化 timer | `SkillSystem.ts` | 商店购买沿用此特例 |
 | 切比雪夫距离判定（intimidate / aura） | `SkillSystem.ts` / `GameLogic.ts` | 距离度量未来可加入 spec |
 | 描述模板 `descStack(level)` | `SkillDefs` in `SkillSystem.ts` | 已部分迁移到 `getScalingValue` |
 

@@ -56,6 +56,7 @@ export enum GamePhase {
   ENEMY_TURN = 'enemy_turn',
   ANIMATING = 'animating',
   SPAWNING = 'spawning',
+  SHOP = 'shop',
   GAME_OVER = 'game_over',
 }
 
@@ -104,16 +105,27 @@ export interface SkillLevels {
   siege: number;
 }
 
+export interface ShopOffer {
+  id: string;
+  skillId: SkillId;
+  price: number;
+  purchased: boolean;
+}
+
 export interface GameState {
   phase: GamePhase;
   turn: number;
   score: number;
+  coins: number;
   grid: Grid;
   entities: Map<string, Entity>;
   player: Entity | null;
   enemies: Entity[];
   animating: boolean;
-  lastSkillScore: number;
+  lastShopScore: number;
+  shopOffers: ShopOffer[];
+  shopOpenedAt?: number;
+  pausedDurationMs: number;
   skills: SkillLevels;
   castlingCooldown: number;
   siegeTimer: number;

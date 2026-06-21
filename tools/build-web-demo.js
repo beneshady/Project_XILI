@@ -14,6 +14,7 @@ const sources = [
   'src/core/utils.ts',
   'src/core/SkillSpecs.ts',
   'src/core/SkillSystem.ts',
+  'src/core/ShopSystem.ts',
   'src/core/Leaderboard.ts',
   'src/core/GameLogic.ts',
   'src/render/canvas-renderer.ts',
@@ -128,7 +129,7 @@ function renderResultOverlay(state) {
   const overlay = document.getElementById('leaderboard-overlay');
   if (!overlay) return;
 
-  const elapsedSec = Math.max(0, Math.floor(((state.finishedAt || Date.now()) - state.startedAt) / 1000));
+  const elapsedSec = Math.floor(getElapsedGameMs(state) / 1000);
   const lastName = readLastName();
 
   overlay.innerHTML =
@@ -187,6 +188,42 @@ function renderResultOverlay(state) {
   });
 }
 
+function renderShopOverlay(state, onClose) {
+  const overlay = document.getElementById('leaderboard-overlay');
+  if (!overlay) return;
+  const cards = state.shopOffers.map(offer => {
+    const spec = SKILL_SPECS[offer.skillId];
+    const status = canPurchaseOffer(state, offer);
+    const disabled = status !== 'purchased';
+    const label = offer.purchased ? '售罄'
+      : status === 'max_level' ? '已满级'
+      : status === 'insufficient_coins' ? '金币不足'
+      : offer.price + ' 金币购买';
+    return '<article class="shop-card" data-offer-id="' + offer.id + '">' +
+      '<h3>' + escapeHtml(spec.icon + ' ' + spec.name) + ' Lv.' + state.skills[offer.skillId] + '</h3>' +
+      '<p>' + escapeHtml(spec.desc) + '</p>' +
+      '<button type="button" data-action="buy" data-offer-id="' + offer.id + '"' +
+        (disabled ? ' disabled' : '') + '>' + label + '</button>' +
+      '</article>';
+  }).join('');
+
+  overlay.innerHTML =
+    '<div class="modal shop-modal">' +
+      '<h2>技能商店</h2>' +
+      '<div class="rank-line">金币：<span data-shop-coins>' + state.coins + '</span></div>' +
+      '<div class="shop-cards">' + cards + '</div>' +
+      '<div class="actions"><button type="button" data-action="continue">继续战斗</button></div>' +
+    '</div>';
+  overlay.hidden = false;
+  overlay.querySelectorAll('[data-action="buy"]').forEach(button => {
+    button.addEventListener('click', () => {
+      purchaseShopOffer(state, button.getAttribute('data-offer-id'));
+      renderShopOverlay(state, onClose);
+    });
+  });
+  overlay.querySelector('[data-action="continue"]').addEventListener('click', onClose);
+}
+
 function startWebDemo() {
   const canvas = document.getElementById('game-canvas');
   const status = document.getElementById('status');
@@ -222,6 +259,9 @@ function startWebDemo() {
         : '点击绿色交点移动，红色区域为敌方威胁。';
     }
     // 进入 GAME_OVER 时打开结算面板（只触发一次）
+    if (state.phase === GamePhase.SHOP && lastShownPhase !== GamePhase.SHOP) {
+      renderShopOverlay(state, continueAfterShop);
+    }
     if (state.phase === GamePhase.GAME_OVER && lastShownPhase !== GamePhase.GAME_OVER) {
       stopTick();
       renderResultOverlay(state);
@@ -247,6 +287,13 @@ function startWebDemo() {
     draw();
   }
   window.__xiliRestart = restart;
+
+  function continueAfterShop() {
+    closeShop(state);
+    if (overlay) { overlay.hidden = true; overlay.innerHTML = ''; }
+    lastShownPhase = null;
+    draw();
+  }
 
   canvas.addEventListener('click', (event) => {
     if (overlay && !overlay.hidden) return; // 弹窗时禁用棋盘点击
@@ -315,14 +362,8 @@ function startWebDemo() {
         try { localStorage.setItem(NAME_KEY, name); } catch (_) { /* ignore */ }
       },
       grantSkill(id) {
-        // 直接调核心层的 grantRandomSkill（兼容 5 个技能均可被命中）；
-        // 测试用例需要确定性时，可以用 setSkillLevel 直接灌等级。
-        const oldRandom = Math.random;
-        const ids = ['armor', 'intimidate', 'castling', 'aura', 'siege'];
-        const idx = ids.indexOf(id);
-        if (idx < 0) throw new Error('unknown skill: ' + id);
-        Math.random = () => idx / ids.length + 0.0001;
-        try { grantRandomSkill(state); } finally { Math.random = oldRandom; }
+        // Explicit test-only grant path; production skill growth goes through shop purchases.
+        if (!grantSkill(state, id)) throw new Error('cannot grant skill: ' + id);
         draw();
       },
       setSkillLevel(id, level) {
@@ -333,6 +374,18 @@ function startWebDemo() {
       // 暴露纯函数给端到端测试断言（非 UI 路径）
       getScalingValue: getScalingValue,
       SKILL_SPECS: SKILL_SPECS,
+      awardScore(amount) { awardScore(state, amount); draw(); },
+      openShop(now) { const opened = maybeOpenShop(state, now); draw(); return opened; },
+      purchaseOffer(id) { const result = purchaseShopOffer(state, id); draw(); return result; },
+      closeShop() { continueAfterShop(); },
+      setShopOffers(skillIds) {
+        state.shopOffers = skillIds.map((skillId, i) => ({ id: 'test_' + i, skillId, price: SHOP_PRICE, purchased: false }));
+        state.phase = GamePhase.SHOP;
+        state.shopOpenedAt = Date.now();
+        draw();
+      },
+      getElapsedGameMs: () => getElapsedGameMs(state),
+      executeEnemyTurn: () => executeEnemyTurn(state),
     },
   };
 }

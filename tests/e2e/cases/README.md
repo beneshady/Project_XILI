@@ -27,9 +27,10 @@
 | 排行榜系统 | [leaderboard.md](leaderboard.md) | 30 | ✅ 30/30 通过 |
 | HUD 与生存计时 | [hud-timer.md](hud-timer.md) | 5 | ✅ 5/5 通过 |
 | 技能系统 | [skill-system.md](skill-system.md) | 5 | ✅ 5/5 通过 |
+| 商店系统 | [shop-system.md](shop-system.md) | 4 | ✅ 4/4 通过 |
 | 视觉回归 | [visual-regression.md](visual-regression.md) | 4 | ⬜ 暂未实现（需 ffmpeg/PRNG 重构） |
 | 边界与容错 | [edge-cases.md](edge-cases.md) | 4 | ✅ 4/4 通过 |
-| **合计** | | **48** | **44/48 通过，4 暂未实现** |
+| **合计** | | **52** | **48/52 通过，4 暂未实现** |
 
 ## 实现路径
 
@@ -40,6 +41,7 @@
 | `cases/leaderboard.md` | `leaderboard.spec.js`（首批 10 条 P0）+ `leaderboard-extended.spec.js`（剩余 20 条） |
 | `cases/hud-timer.md` | `hud-timer.spec.js` |
 | `cases/skill-system.md` | `skill-system.spec.js` |
+| `cases/shop-system.md` | `shop-system.spec.js` |
 | `cases/edge-cases.md` | `edge-cases.spec.js` |
 | `cases/visual-regression.md` | （未实现） |
 
@@ -58,6 +60,6 @@ npx playwright show-report                     # 失败后看报告
 ## 上次全量结果
 
 ```
-Running 44 tests using 4 workers
-44 passed (23.0s)
+Running 48 tests
+48 passed
 ```

@@ -2,11 +2,10 @@
 // 技能系统（共享逻辑层 - 零平台依赖）
 // ----------------------------------------------------------------------------
 
-import { SkillId, SKILL_IDS, SkillLevels } from './Types';
+import { SkillId, SkillLevels } from './Types';
 import { GameState } from './Types';
 import { posEq, posKey } from './Utils';
 import { EntityType } from './Types';
-import { SKILL_SCORE_THRESHOLD } from './GameConfig';
 import { SKILL_SPECS, getScalingValue } from './SkillSpecs';
 
 // 技能定义（名称/图标/描述等展示信息由各平台 UI 层实现）
@@ -74,19 +73,9 @@ export function getAuraRange(level: number): number {
   return getScalingValue(SKILL_SPECS.aura, 'auraRange', level);
 }
 
-// 分数阈值
-
-export function getNextSkillThreshold(lastScore: number): number {
-  if (lastScore === 0) return 3;
-  if (lastScore === 3) return 7;
-  return lastScore + 5;
-}
-
-// 赋予随机技能（返回技能ID，UI通知由调用方处理）
-
-export function grantRandomSkill(state: GameState): SkillId {
-  const ids = Object.keys(SKILL_SPECS) as SkillId[];
-  const skillId = ids[Math.floor(Math.random() * ids.length)];
+export function grantSkill(state: GameState, skillId: SkillId): boolean {
+  const spec = SKILL_SPECS[skillId];
+  if (!spec || state.skills[skillId] >= spec.maxLevel) return false;
   state.skills[skillId]++;
 
   if (skillId === 'castling' && state.skills.castling === 1) {
@@ -95,22 +84,7 @@ export function grantRandomSkill(state: GameState): SkillId {
   if (skillId === 'siege' && state.skills.siege === 1) {
     state.siegeTimer = getScalingValue(SKILL_SPECS.siege, 'interval', 1);
   }
-
-  return skillId;
-}
-
-// 检查是否触发技能（返回本次获得的技能ID列表，UI通知由调用方处理）
-
-export function checkSkillTrigger(state: GameState): SkillId[] {
-  const acquired: SkillId[] = [];
-  let nextThreshold = getNextSkillThreshold(state.lastSkillScore);
-  while (state.score >= nextThreshold) {
-    state.lastSkillScore = nextThreshold;
-    const skillId = grantRandomSkill(state);
-    acquired.push(skillId);
-    nextThreshold = getNextSkillThreshold(state.lastSkillScore);
-  }
-  return acquired;
+  return true;
 }
 
 // 借刀杀人：冻结相邻敌人
@@ -152,7 +126,6 @@ export function applySiegeEffect(state: GameState): string | null {
       target.isDead = true;
       const cell = state.grid.cells.get(posKey(target.position));
       if (cell) cell.entity = null;
-      state.score += 1;
       return target.id;
     }
   }

@@ -123,4 +123,5 @@ export const SCORE_CONFIG = {
   deadCleanupInterval: 10,
 } as const;
 
-export const SKILL_SCORE_THRESHOLD = 5;
+export const SHOP_PRICE = 5;
+export const SHOP_OFFER_COUNT = 3;

@@ -14,7 +14,7 @@ module.exports = defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'npx http-server -p 5500 -c-1 -s .',
+    command: 'node node_modules/http-server/bin/http-server -p 5500 -c-1 -s .',
     url: 'http://127.0.0.1:5500/demo.html',
     reuseExistingServer: !process.env.CI,
     timeout: 15_000,
